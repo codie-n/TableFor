@@ -29,6 +29,7 @@ data class DinnerGroup(
     val restaurantName: String = "Trattoria Bella",
     val cuisine: String = "Italian",
     val neighborhood: String = "Downtown",
+    val address: String = "142 5th Ave, New York, NY 10011",
     val timeString: String = "Thursday, 7:00 PM",
     val members: List<GroupMember> = listOf(
         GroupMember("1", "Alex Chen", "You", 4.8f, "Vegetarian"),
@@ -53,7 +54,8 @@ data class ChatMessage(
     val senderName: String,
     val text: String,
     val timestamp: String,
-    val isMe: Boolean
+    val isMe: Boolean,
+    val isRead: Boolean = true
 )
 
 data class MemberRating(

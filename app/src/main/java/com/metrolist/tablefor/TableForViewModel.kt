@@ -36,7 +36,7 @@ class TableForViewModel : ViewModel() {
     }
 
     private fun generateUpcomingWeekGrid() {
-        val timeSlots = listOf("6:00 PM", "7:00 PM", "8:00 PM")
+        val timeSlots = listOf("5:00 PM", "5:30 PM", "6:00 PM", "6:30 PM", "7:00 PM", "7:30 PM", "8:00 PM", "8:30 PM", "9:00 PM", "9:30 PM", "10:00 PM")
         val calendar = Calendar.getInstance()
         val dateFormat = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
         
@@ -62,6 +62,20 @@ class TableForViewModel : ViewModel() {
 
     fun updateProfile(newProfile: UserProfile) {
         profile = newProfile
+        dinnerGroup = dinnerGroup?.let { group ->
+            val updatedMembers = group.members.map { member ->
+                if (member.id == "1") {
+                    member.copy(
+                        name = newProfile.name,
+                        rating = newProfile.trustRating,
+                        diet = newProfile.diets.joinToString(", ").ifEmpty { "None" }
+                    )
+                } else {
+                    member
+                }
+            }
+            group.copy(members = updatedMembers)
+        }
     }
 
     fun toggleAvailability(dayIndex: Int, timeSlot: String) {
@@ -81,7 +95,8 @@ class TableForViewModel : ViewModel() {
             senderName = profile.name,
             text = text,
             timestamp = SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date()),
-            isMe = true
+            isMe = true,
+            isRead = true
         )
         chatMessages = chatMessages + newMsg
     }

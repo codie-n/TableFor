@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -158,7 +159,7 @@ fun ProfileScreen(viewModel: TableForViewModel) {
 
     val diets = listOf("Vegetarian", "Vegan", "Halal", "Gluten-Free", "None")
     val cuisines = listOf("Italian", "Japanese", "Mexican", "Thai", "American", "Indian", "Mediterranean")
-    val budgets = listOf("$ (Budget)", "$$ (Moderate)", "$$$ (Upscale)", "$$$$ (Fine Dining)")
+    val budgets = listOf("$ (Budget)", "$$ (Moderate)", "$$$ (Upscale)")
 
     LazyColumn(
         modifier = Modifier
@@ -310,92 +311,111 @@ fun ProfileScreen(viewModel: TableForViewModel) {
 @Composable
 fun ScheduleScreen(viewModel: TableForViewModel) {
     val grid = viewModel.availabilityGrid
-    val timeSlots = listOf("6:00 PM", "7:00 PM", "8:00 PM")
+    val timeSlots = listOf("5:00 PM", "5:30 PM", "6:00 PM", "6:30 PM", "7:00 PM", "7:30 PM", "8:00 PM", "8:30 PM", "9:00 PM", "9:30 PM", "10:00 PM")
     
     // Extract unique days
     val days = grid.map { it.dayLabel }.distinct()
+    var selectedDayIndex by remember { mutableStateOf(0) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
-        Text("Upcoming Week Schedule", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+        Text("Set Your Dinner Availability", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
         Text("Tap the spreadsheet cells to set when you are free for dinner.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Day Selector with Left / Right buttons
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { if (selectedDayIndex > 0) selectedDayIndex-- },
+                    enabled = selectedDayIndex > 0
+                ) {
+                    Icon(Icons.Default.ChevronLeft, contentDescription = "Previous Day")
+                }
+
+                Text(
+                    text = if (days.isNotEmpty()) days[selectedDayIndex] else "",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+
+                IconButton(
+                    onClick = { if (selectedDayIndex < days.size - 1) selectedDayIndex++ },
+                    enabled = selectedDayIndex < days.size - 1
+                ) {
+                    Icon(Icons.Default.ChevronRight, contentDescription = "Next Day")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth(),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(modifier = Modifier.padding(8.dp)) {
-                // Header row: Time slot column header + 7 days
-                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    // Time column title
-                    Box(
-                        modifier = Modifier
-                            .width(80.dp)
-                            .padding(8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Time", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                    days.forEach { day ->
-                        Box(
-                            modifier = Modifier
-                                .width(90.dp)
-                                .padding(8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(day, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
-                        }
-                    }
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Header row for the selected day
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Time Slot", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Availability", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
 
                 Divider(modifier = Modifier.padding(vertical = 4.dp))
 
-                // Rows for each time slot
+                // Time slots for selected day
                 timeSlots.forEach { timeSlot ->
+                    val cell = grid.find { it.dayIndex == selectedDayIndex && it.timeSlot == timeSlot }
+                    val isAvailable = cell?.isAvailable == true
+
                     Row(
                         modifier = Modifier
-                            .horizontalScroll(rememberScrollState())
-                            .padding(vertical = 6.dp),
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Time slot label
+                        Text(
+                            text = timeSlot,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+
                         Box(
                             modifier = Modifier
-                                .width(80.dp)
-                                .padding(horizontal = 4.dp),
+                                .width(140.dp)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isAvailable) MaterialTheme.colorScheme.primaryContainer else Color.LightGray.copy(alpha = 0.3f))
+                                .clickable {
+                                    viewModel.toggleAvailability(selectedDayIndex, timeSlot)
+                                },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(timeSlot, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                        }
-
-                        // Cells for each day in this time slot
-                        days.forEachIndexed { dayIdx, _ ->
-                            val cell = grid.find { it.dayIndex == dayIdx && it.timeSlot == timeSlot }
-                            val isAvailable = cell?.isAvailable == true
-
-                            Box(
-                                modifier = Modifier
-                                    .width(90.dp.coerceAtLeast(90.dp))
-                                    .height(48.dp)
-                                    .padding(4.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isAvailable) MaterialTheme.colorScheme.primaryContainer else Color.LightGray.copy(alpha = 0.3f))
-                                    .clickable {
-                                        viewModel.toggleAvailability(dayIdx, timeSlot)
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (isAvailable) "Free ✓" else "Busy",
-                                    color = if (isAvailable) MaterialTheme.colorScheme.onPrimaryContainer else Color.DarkGray,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
+                            Text(
+                                text = if (isAvailable) "Free ✓" else "Busy",
+                                color = if (isAvailable) MaterialTheme.colorScheme.onPrimaryContainer else Color.DarkGray,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
                     }
                 }
@@ -410,6 +430,7 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
 @Composable
 fun MatchScreen(viewModel: TableForViewModel) {
     val group = viewModel.dinnerGroup
+    var isExpanded by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -421,18 +442,42 @@ fun MatchScreen(viewModel: TableForViewModel) {
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isExpanded = !isExpanded }
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Restaurant, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(group.restaurantName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Restaurant, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(group.restaurantName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            }
+                            Icon(
+                                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("🍽️ Cuisine: ${group.cuisine}", style = MaterialTheme.typography.bodyMedium)
                         Text("📍 Neighborhood: ${group.neighborhood}", style = MaterialTheme.typography.bodyMedium)
                         Text("⏰ Time: ${group.timeString}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.secondary)
+
+                        if (isExpanded) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Divider(modifier = Modifier.padding(vertical = 4.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("📍 Address: ${group.address}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                            Text("Tap to collapse", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        } else {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Tap to view address ↓", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        }
                     }
                 }
             }
@@ -510,7 +555,16 @@ fun ChatScreen(viewModel: TableForViewModel) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text(msg.text, color = if (msg.isMe) MaterialTheme.colorScheme.onPrimaryContainer else Color.Black)
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text(msg.timestamp, fontSize = 9.sp, color = Color.Gray, modifier = Modifier.align(Alignment.End))
+                                Text(
+                                    text = if (msg.isMe) {
+                                        if (msg.isRead) "${msg.timestamp}  Read ✓✓" else "${msg.timestamp}  Sent ✓"
+                                    } else {
+                                        msg.timestamp
+                                    },
+                                    fontSize = 9.sp,
+                                    color = Color.Gray,
+                                    modifier = Modifier.align(Alignment.End)
+                                )
                             }
                         }
                     }
@@ -557,7 +611,7 @@ fun RatingScreen(viewModel: TableForViewModel) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Text("Post-Dinner Ratings", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+            Text("Rate Dinner Companions", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
             Text("Rate your dinner companions to maintain a friendly, reliable community.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
         }
 
