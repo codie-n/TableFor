@@ -31,6 +31,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.tooling.preview.Preview
 import kotlinx.serialization.Serializable
 
 // Type-safe navigation routes
@@ -669,5 +670,46 @@ fun RatingSliderRow(label: String, score: Int, onScoreChanged: (Int) -> Unit) {
             valueRange = 1f..5f,
             steps = 3
         )
+    }
+}
+
+
+@Preview(name = "Profile Screen", showBackground = true)
+@Composable
+fun ProfileScreenPreview() {
+    MaterialTheme {
+        ProfileScreen(viewModel = TableForViewModel())
+    }
+}
+
+@Preview(name = "Schedule Screen", showBackground = true)
+@Composable
+fun ScheduleScreenPreview() {
+    MaterialTheme {
+        ScheduleScreen(viewModel = TableForViewModel())
+    }
+}
+
+@Preview(name = "Match Screen", showBackground = true)
+@Composable
+fun MatchScreenPreview() {
+    MaterialTheme {
+        MatchScreen(viewModel = TableForViewModel())
+    }
+}
+
+@Preview(name = "Chat Screen", showBackground = true)
+@Composable
+fun ChatScreenPreview() {
+    MaterialTheme {
+        ChatScreen(viewModel = TableForViewModel())
+    }
+}
+
+@Preview(name = "Rating Screen", showBackground = true)
+@Composable
+fun RatingScreenPreview() {
+    MaterialTheme {
+        RatingScreen(viewModel = TableForViewModel())
     }
 }
