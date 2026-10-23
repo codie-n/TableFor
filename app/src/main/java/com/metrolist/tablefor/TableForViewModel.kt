@@ -4,11 +4,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class TableForViewModel : ViewModel() {
+class TableForViewModel(
+    private val repository: TableForRepository = TableForRepository()
+) : ViewModel() {
+
     var profile by mutableStateOf(UserProfile())
         private set
 
@@ -33,6 +38,48 @@ class TableForViewModel : ViewModel() {
     init {
         generateUpcomingWeekGrid()
         initRatings()
+        initializeFirestoreSync()
+    }
+
+    private fun initializeFirestoreSync() {
+        viewModelScope.launch {
+            repository.signInAnonymously()
+
+            // Observe User Profile
+            launch {
+                repository.getUserProfileFlow().collect { cloudProfile ->
+                    if (cloudProfile != null) {
+                        profile = cloudProfile
+                    }
+                }
+            }
+
+            // Observe Realtime Group Chat Messages
+            launch {
+                val groupId = dinnerGroup?.groupId ?: "group_101"
+                repository.getChatMessagesFlow(groupId).collect { cloudMessages ->
+                    if (cloudMessages.isNotEmpty()) {
+                        chatMessages = cloudMessages
+                    }
+                }
+            }
+
+            // Observe Schedule Availability
+            launch {
+                repository.getAvailabilityFlow().collect { cloudSlots ->
+                    if (cloudSlots.isNotEmpty()) {
+                        availabilityGrid = availabilityGrid.map { cell ->
+                            val key = "${cell.dayIndex}_${cell.timeSlot}"
+                            if (cloudSlots.containsKey(key)) {
+                                cell.copy(isAvailable = cloudSlots[key] == true)
+                            } else {
+                                cell
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private fun generateUpcomingWeekGrid() {
@@ -76,29 +123,44 @@ class TableForViewModel : ViewModel() {
             }
             group.copy(members = updatedMembers)
         }
+        viewModelScope.launch {
+            repository.saveProfile(newProfile)
+        }
     }
 
     fun toggleAvailability(dayIndex: Int, timeSlot: String) {
+        var updatedStatus = false
         availabilityGrid = availabilityGrid.map { cell ->
             if (cell.dayIndex == dayIndex && cell.timeSlot == timeSlot) {
-                cell.copy(isAvailable = !cell.isAvailable)
+                val newStatus = !cell.isAvailable
+                updatedStatus = newStatus
+                cell.copy(isAvailable = newStatus)
             } else {
                 cell
             }
+        }
+        viewModelScope.launch {
+            repository.updateAvailability(dayIndex, timeSlot, updatedStatus)
         }
     }
 
     fun sendMessage(text: String) {
         if (text.isBlank()) return
+        val currentTimestamp = SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date())
         val newMsg = ChatMessage(
             id = System.currentTimeMillis().toString(),
             senderName = profile.name,
             text = text,
-            timestamp = SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date()),
+            timestamp = currentTimestamp,
             isMe = true,
             isRead = true
         )
         chatMessages = chatMessages + newMsg
+
+        viewModelScope.launch {
+            val groupId = dinnerGroup?.groupId ?: "group_101"
+            repository.sendMessage(groupId, text, profile.name)
+        }
     }
 
     fun updateRating(memberId: String, punctuality: Int, friendliness: Int, reliability: Int, notes: String) {
@@ -108,6 +170,10 @@ class TableForViewModel : ViewModel() {
             } else {
                 rating
             }
+        }
+        viewModelScope.launch {
+            val groupId = dinnerGroup?.groupId ?: "group_101"
+            repository.submitRatings(groupId, memberRatings)
         }
     }
 }
