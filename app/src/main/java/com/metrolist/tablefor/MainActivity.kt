@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -31,6 +33,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.tooling.preview.Preview
 import kotlinx.serialization.Serializable
 
 // Type-safe navigation routes
@@ -148,6 +151,7 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
 
 
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(viewModel: TableForViewModel) {
     val profile = viewModel.profile
@@ -170,17 +174,20 @@ fun ProfileScreen(viewModel: TableForViewModel) {
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                shape = RoundedCornerShape(24.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(20.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
-                        Text("Trust & Reliability Score", style = MaterialTheme.typography.titleSmall)
-                        Text("${profile.trustRating} ★ (${profile.totalRatings} dinners)", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        Text("High reliability tier - No-show protected", style = MaterialTheme.typography.bodySmall)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Trust & Reliability Score", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("${profile.trustRating} ★ (${profile.totalRatings} dinners)", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text("High reliability tier - No-show protected", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
                     }
                     Box(
                         modifier = Modifier
@@ -196,94 +203,119 @@ fun ProfileScreen(viewModel: TableForViewModel) {
         }
 
         item {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Full Name") },
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
                 modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        item {
-            OutlinedTextField(
-                value = location,
-                onValueChange = { location = it },
-                label = { Text("City / Neighborhood (e.g., Downtown)") },
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null) }
-            )
-        }
-
-        item {
-            OutlinedTextField(
-                value = bio,
-                onValueChange = { bio = it },
-                label = { Text("Bio / About Me") },
-                modifier = Modifier.fillMaxWidth(),
-                maxLines = 3
-            )
-        }
-
-        item {
-            Text("Dietary Preferences", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                diets.forEach { diet ->
-                    val selected = profile.diets.contains(diet)
-                    FilterChip(
-                        selected = selected,
-                        onClick = {
-                            val newDiets = if (selected) profile.diets - diet else profile.diets + diet
-                            viewModel.updateProfile(profile.copy(diets = newDiets))
-                        },
-                        label = { Text(diet) }
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Personal Information", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Full Name") },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = location,
+                        onValueChange = { location = it },
+                        label = { Text("City / Neighborhood (e.g., Downtown)") },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null) }
+                    )
+                    OutlinedTextField(
+                        value = bio,
+                        onValueChange = { bio = it },
+                        label = { Text("Bio / About Me") },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3
                     )
                 }
             }
         }
 
         item {
-            Text("Cuisine Preferences", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                cuisines.forEach { cuisine ->
-                    val selected = profile.cuisinePreferences.contains(cuisine)
-                    FilterChip(
-                        selected = selected,
-                        onClick = {
-                            val newCuisines = if (selected) profile.cuisinePreferences - cuisine else profile.cuisinePreferences + cuisine
-                            viewModel.updateProfile(profile.copy(cuisinePreferences = newCuisines))
-                        },
-                        label = { Text(cuisine) }
-                    )
-                }
-            }
-        }
-
-        item {
-            Text("Dining Budget", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                budgets.forEach { b ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                selectedBudget = b
-                                viewModel.updateProfile(profile.copy(budget = b))
-                            }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Dietary Preferences", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        RadioButton(
-                            selected = (selectedBudget == b),
-                            onClick = {
-                                selectedBudget = b
-                                viewModel.updateProfile(profile.copy(budget = b))
-                            }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(b)
+                        diets.forEach { diet ->
+                            val selected = profile.diets.contains(diet)
+                            FilterChip(
+                                selected = selected,
+                                onClick = {
+                                    val newDiets = if (selected) profile.diets - diet else profile.diets + diet
+                                    viewModel.updateProfile(profile.copy(diets = newDiets))
+                                },
+                                label = { Text(diet) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Cuisine Preferences", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        cuisines.forEach { cuisine ->
+                            val selected = profile.cuisinePreferences.contains(cuisine)
+                            FilterChip(
+                                selected = selected,
+                                onClick = {
+                                    val newCuisines = if (selected) profile.cuisinePreferences - cuisine else profile.cuisinePreferences + cuisine
+                                    viewModel.updateProfile(profile.copy(cuisinePreferences = newCuisines))
+                                },
+                                label = { Text(cuisine) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Dining Budget", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    budgets.forEach { b ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    selectedBudget = b
+                                    viewModel.updateProfile(profile.copy(budget = b))
+                                }
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = (selectedBudget == b),
+                                onClick = {
+                                    selectedBudget = b
+                                    viewModel.updateProfile(profile.copy(budget = b))
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(b, fontWeight = FontWeight.Medium)
+                        }
                     }
                 }
             }
@@ -295,9 +327,10 @@ fun ProfileScreen(viewModel: TableForViewModel) {
                     viewModel.updateProfile(profile.copy(name = name, bio = bio, location = location, budget = selectedBudget))
                     savedMessage = true
                 },
-                modifier = Modifier.fillMaxWidth().height(50.dp)
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().height(54.dp)
             ) {
-                Text("Save Profile & Preferences", fontSize = 16.sp)
+                Text("Save Profile & Preferences", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             if (savedMessage) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -313,7 +346,6 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
     val grid = viewModel.availabilityGrid
     val timeSlots = listOf("5:00 PM", "5:30 PM", "6:00 PM", "6:30 PM", "7:00 PM", "7:30 PM", "8:00 PM", "8:30 PM", "9:00 PM", "9:30 PM", "10:00 PM")
     
-    // Extract unique days
     val days = grid.map { it.dayLabel }.distinct()
     var selectedDayIndex by remember { mutableStateOf(0) }
 
@@ -321,21 +353,30 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("Set Your Dinner Availability", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-        Text("Tap the spreadsheet cells to set when you are free for dinner.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-        Spacer(modifier = Modifier.height(16.dp))
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text("Set Your Dinner Availability", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Tap the spreadsheet cells below to set when you are free for dinner.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+            }
+        }
 
-        // Day Selector with Left / Right buttons
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -349,7 +390,8 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
                 Text(
                     text = if (days.isNotEmpty()) days[selectedDayIndex] else "",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 IconButton(
@@ -361,14 +403,12 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Header row for the selected day
+            Column(modifier = Modifier.padding(20.dp)) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -379,9 +419,8 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
                     Text("Availability", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
 
-                Divider(modifier = Modifier.padding(vertical = 4.dp))
+                Divider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                // Time slots for selected day
                 timeSlots.forEach { timeSlot ->
                     val cell = grid.find { it.dayIndex == selectedDayIndex && it.timeSlot == timeSlot }
                     val isAvailable = cell?.isAvailable == true
@@ -403,7 +442,7 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
                             modifier = Modifier
                                 .width(140.dp)
                                 .height(44.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(if (isAvailable) MaterialTheme.colorScheme.primaryContainer else Color.LightGray.copy(alpha = 0.3f))
                                 .clickable {
                                     viewModel.toggleAvailability(selectedDayIndex, timeSlot)
@@ -414,7 +453,7 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
                                 text = if (isAvailable) "Free ✓" else "Busy",
                                 color = if (isAvailable) MaterialTheme.colorScheme.onPrimaryContainer else Color.DarkGray,
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
@@ -422,8 +461,18 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
             }
         }
         
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("💡", fontSize = 20.sp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("Matching happens automatically based on overlapping free slots, cuisine preferences, and trust ratings.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
-        Text("💡 Tip: Matching happens automatically based on overlapping free slots, cuisine preferences, and trust ratings.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
     }
 }
 
@@ -441,21 +490,33 @@ fun MatchScreen(viewModel: TableForViewModel) {
         if (group != null) {
             item {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(24.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { isExpanded = !isExpanded }
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(20.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Restaurant, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(group.restaurantName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.secondary),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Restaurant, contentDescription = null, tint = Color.White)
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(group.restaurantName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                    Text("Matched Dinner Group", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                }
                             }
                             Icon(
                                 imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -463,34 +524,49 @@ fun MatchScreen(viewModel: TableForViewModel) {
                                 tint = MaterialTheme.colorScheme.secondary
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("🍽️ Cuisine: ${group.cuisine}", style = MaterialTheme.typography.bodyMedium)
-                        Text("📍 Neighborhood: ${group.neighborhood}", style = MaterialTheme.typography.bodyMedium)
-                        Text("⏰ Time: ${group.timeString}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.secondary)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Text("🍽️ ${group.cuisine}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                            Text("📍 ${group.neighborhood}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("⏰ ${group.timeString}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
 
                         if (isExpanded) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Divider(color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f))
                             Spacer(modifier = Modifier.height(8.dp))
-                            Divider(modifier = Modifier.padding(vertical = 4.dp))
-                            Spacer(modifier = Modifier.height(4.dp))
                             Text("📍 Address: ${group.address}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text("Tap to collapse", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                         } else {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("Tap to view address ↓", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Tap to view restaurant address ↓", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                         }
                     }
                 }
             }
 
             item {
-                Text("Table Group Members (${group.members.size})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                Text("Matched based on availability, budget, and reliability tier.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Table Group Members (${group.members.size})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text("Matched based on availability, budget, and reliability tier.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
+                }
             }
 
             items(group.members) { member ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
@@ -500,23 +576,32 @@ fun MatchScreen(viewModel: TableForViewModel) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(46.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.primaryContainer),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(member.name.take(1), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Text(member.name.take(1), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 18.sp)
                             }
-                            Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(14.dp))
                             Column {
-                                Text(member.name, fontWeight = FontWeight.Bold)
+                                Text(member.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text("${member.role} • Diet: ${member.diet}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                             }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text("${member.rating}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFFFFB300).copy(alpha = 0.15f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("${member.rating}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF8D6E63))
+                            }
                         }
                     }
                 }
@@ -535,33 +620,42 @@ fun ChatScreen(viewModel: TableForViewModel) {
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        Box(modifier = Modifier.weight(1f)) {
+        Card(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+        ) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(messages) { msg ->
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = if (msg.isMe) Alignment.End else Alignment.Start
                     ) {
-                        Text(msg.senderName, fontSize = 11.sp, color = Color.Gray)
+                        Text(msg.senderName, fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
                         Spacer(modifier = Modifier.height(2.dp))
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (msg.isMe) MaterialTheme.colorScheme.primaryContainer else Color.LightGray.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(18.dp),
+                            color = if (msg.isMe) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            shadowElevation = 1.dp,
                             modifier = Modifier.widthIn(max = 280.dp)
                         ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Text(msg.text, color = if (msg.isMe) MaterialTheme.colorScheme.onPrimaryContainer else Color.Black)
-                                Spacer(modifier = Modifier.height(2.dp))
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(msg.text, color = if (msg.isMe) MaterialTheme.colorScheme.onPrimaryContainer else Color.Black, fontSize = 15.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = if (msg.isMe) {
                                         if (msg.isRead) "${msg.timestamp}  Read ✓✓" else "${msg.timestamp}  Sent ✓"
                                     } else {
                                         msg.timestamp
                                     },
-                                    fontSize = 9.sp,
+                                    fontSize = 10.sp,
                                     color = Color.Gray,
                                     modifier = Modifier.align(Alignment.End)
                                 )
@@ -572,28 +666,47 @@ fun ChatScreen(viewModel: TableForViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Row(
+        Card(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            OutlinedTextField(
-                value = inputMessage,
-                onValueChange = { inputMessage = it },
-                placeholder = { Text("Message group...") },
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            IconButton(
-                onClick = {
-                    viewModel.sendMessage(inputMessage)
-                    inputMessage = ""
-                },
+            Row(
                 modifier = Modifier
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White)
+                OutlinedTextField(
+                    value = inputMessage,
+                    onValueChange = { inputMessage = it },
+                    placeholder = { Text("Message group...") },
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.weight(1f),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = Color.Transparent,
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                    )
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(
+                    onClick = {
+                        if (inputMessage.isNotBlank()) {
+                            viewModel.sendMessage(inputMessage)
+                            inputMessage = ""
+                        }
+                    },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                ) {
+                    Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+                }
             }
         }
     }
@@ -611,25 +724,50 @@ fun RatingScreen(viewModel: TableForViewModel) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Text("Rate Dinner Companions", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-            Text("Rate your dinner companions to maintain a friendly, reliable community.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text("Rate Dinner Companions", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Rate your dinner companions to maintain a friendly, reliable community.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+                }
+            }
         }
 
         items(ratings) { rating ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(rating.memberName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(rating.memberName.take(1), fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(rating.memberName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     RatingSliderRow(label = "Punctuality", score = rating.punctuality) { newScore ->
                         viewModel.updateRating(rating.memberId, newScore, rating.friendliness, rating.reliability, rating.notes)
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
                     RatingSliderRow(label = "Friendliness", score = rating.friendliness) { newScore ->
                         viewModel.updateRating(rating.memberId, rating.punctuality, newScore, rating.reliability, rating.notes)
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
                     RatingSliderRow(label = "Reliability", score = rating.reliability) { newScore ->
                         viewModel.updateRating(rating.memberId, rating.punctuality, rating.friendliness, newScore, rating.notes)
                     }
@@ -640,9 +778,10 @@ fun RatingScreen(viewModel: TableForViewModel) {
         item {
             Button(
                 onClick = { submitted = true },
-                modifier = Modifier.fillMaxWidth().height(50.dp)
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().height(54.dp)
             ) {
-                Text("Submit Ratings", fontSize = 16.sp)
+                Text("Submit Ratings", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             if (submitted) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -669,5 +808,46 @@ fun RatingSliderRow(label: String, score: Int, onScoreChanged: (Int) -> Unit) {
             valueRange = 1f..5f,
             steps = 3
         )
+    }
+}
+
+
+@Preview(name = "Profile Screen", showBackground = true)
+@Composable
+fun ProfileScreenPreview() {
+    MaterialTheme {
+        ProfileScreen(viewModel = TableForViewModel())
+    }
+}
+
+@Preview(name = "Schedule Screen", showBackground = true)
+@Composable
+fun ScheduleScreenPreview() {
+    MaterialTheme {
+        ScheduleScreen(viewModel = TableForViewModel())
+    }
+}
+
+@Preview(name = "Match Screen", showBackground = true)
+@Composable
+fun MatchScreenPreview() {
+    MaterialTheme {
+        MatchScreen(viewModel = TableForViewModel())
+    }
+}
+
+@Preview(name = "Chat Screen", showBackground = true)
+@Composable
+fun ChatScreenPreview() {
+    MaterialTheme {
+        ChatScreen(viewModel = TableForViewModel())
+    }
+}
+
+@Preview(name = "Rating Screen", showBackground = true)
+@Composable
+fun RatingScreenPreview() {
+    MaterialTheme {
+        RatingScreen(viewModel = TableForViewModel())
     }
 }
