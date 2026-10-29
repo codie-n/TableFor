@@ -1,10 +1,12 @@
 package com.metrolist.tablefor
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.time.Clock
@@ -35,6 +37,9 @@ class TableForViewModel(
         private set
 
     var memberRatings by mutableStateOf<List<MemberRating>>(emptyList())
+        private set
+
+    var ratingsSubmitState by mutableStateOf(SaveState.Idle)
         private set
 
     init {
@@ -165,6 +170,7 @@ class TableForViewModel(
         }
     }
 
+    /** Slider moves change local state only; nothing is written until [submitRatings]. */
     fun updateRating(memberId: String, punctuality: Int, friendliness: Int, reliability: Int, notes: String) {
         memberRatings = memberRatings.map { rating ->
             if (rating.memberId == memberId) {
@@ -173,10 +179,34 @@ class TableForViewModel(
                 rating
             }
         }
+        // A thank-you or error message no longer describes the edited ratings.
+        if (ratingsSubmitState != SaveState.Saving) ratingsSubmitState = SaveState.Idle
+    }
+
+    /** Writes all ratings in one batch. Ignored while a submit is already in progress. */
+    fun submitRatings() {
+        if (ratingsSubmitState == SaveState.Saving) return
+        ratingsSubmitState = SaveState.Saving
+        val submitted = memberRatings
+        val groupId = dinnerGroup?.groupId ?: "group_101"
         viewModelScope.launch {
-            val groupId = dinnerGroup?.groupId ?: "group_101"
-            repository.submitRatings(groupId, memberRatings)
+            ratingsSubmitState = try {
+                repository.submitRatings(groupId, submitted)
+                // If a slider moved while saving, the newest values aren't saved yet.
+                if (memberRatings == submitted) SaveState.Saved else SaveState.Idle
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Submitting ratings failed", e)
+                SaveState.Failed
+            }
         }
     }
+
+    private companion object {
+        const val TAG = "TableForViewModel"
+    }
 }
+
+enum class SaveState { Idle, Saving, Saved, Failed }
 

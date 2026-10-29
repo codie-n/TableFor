@@ -11,6 +11,10 @@ import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+/** One rating per group, rater and target, so submitting again overwrites instead of duplicating. */
+internal fun ratingDocumentId(groupId: String, raterId: String, targetId: String): String =
+    "${groupId}_${raterId}_${targetId}"
+
 class FirebaseTableForRepository : TableForRepository {
 
     private val db: FirebaseFirestore? by lazy {
@@ -202,25 +206,23 @@ class FirebaseTableForRepository : TableForRepository {
     // --- Member Ratings ---
     override suspend fun submitRatings(groupId: String, ratings: List<MemberRating>) {
         val firestore = db ?: return
-        try {
-            for (rating in ratings) {
-                val ratingData = mapOf(
-                    "raterId" to currentUserId,
-                    "targetMemberId" to rating.memberId,
-                    "memberName" to rating.memberName,
-                    "groupId" to groupId,
-                    "punctuality" to rating.punctuality,
-                    "friendliness" to rating.friendliness,
-                    "reliability" to rating.reliability,
-                    "notes" to rating.notes,
-                    "timestamp" to Timestamp.now()
-                )
-                firestore.collection("ratings")
-                    .add(ratingData)
-                    .await()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
+        val raterId = currentUserId
+        val batch = firestore.batch()
+        for (rating in ratings) {
+            val ratingData = mapOf(
+                "raterId" to raterId,
+                "targetMemberId" to rating.memberId,
+                "memberName" to rating.memberName,
+                "groupId" to groupId,
+                "punctuality" to rating.punctuality,
+                "friendliness" to rating.friendliness,
+                "reliability" to rating.reliability,
+                "notes" to rating.notes,
+                "timestamp" to Timestamp.now()
+            )
+            val ref = firestore.collection("ratings").document(ratingDocumentId(groupId, raterId, rating.memberId))
+            batch.set(ref, ratingData)
         }
+        batch.commit().await()
     }
 }

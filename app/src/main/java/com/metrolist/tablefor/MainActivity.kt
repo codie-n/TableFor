@@ -715,7 +715,7 @@ fun ChatScreen(viewModel: TableForViewModel) {
 @Composable
 fun RatingScreen(viewModel: TableForViewModel) {
     val ratings = viewModel.memberRatings
-    var submitted by remember { mutableStateOf(false) }
+    val submitState = viewModel.ratingsSubmitState
 
     LazyColumn(
         modifier = Modifier
@@ -777,15 +777,19 @@ fun RatingScreen(viewModel: TableForViewModel) {
 
         item {
             Button(
-                onClick = { submitted = true },
+                onClick = { viewModel.submitRatings() },
+                enabled = submitState != SaveState.Saving,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(54.dp)
             ) {
                 Text("Submit Ratings", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
-            if (submitted) {
+            if (submitState == SaveState.Saved) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Thank you! Ratings submitted successfully.", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+            } else if (submitState == SaveState.Failed) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Couldn't submit your ratings. Check your connection and try again.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(32.dp))
         }

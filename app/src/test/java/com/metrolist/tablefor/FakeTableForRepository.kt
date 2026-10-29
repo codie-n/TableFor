@@ -1,5 +1,6 @@
 package com.metrolist.tablefor
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -35,6 +36,11 @@ class FakeTableForRepository(
     val availabilityWrites = mutableListOf<Triple<Int, String, Boolean>>()
     val sentMessages = mutableListOf<String>()
     val ratingSubmissions = mutableListOf<List<MemberRating>>()
+
+    /** When set, submitRatings waits for it, so a test can look at the "saving" state. */
+    var submitGate: CompletableDeferred<Unit>? = null
+    /** When set, submitRatings throws it, like a failed Firestore batch. */
+    var submitError: Throwable? = null
 
     override suspend fun signInAnonymously() {
         calls += "signInAnonymously"
@@ -72,6 +78,8 @@ class FakeTableForRepository(
 
     override suspend fun submitRatings(groupId: String, ratings: List<MemberRating>) {
         calls += "submitRatings"
+        submitGate?.await()
+        submitError?.let { throw it }
         ratingSubmissions += ratings
     }
 }

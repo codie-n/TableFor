@@ -21,5 +21,6 @@ interface TableForRepository {
     suspend fun saveProfile(profile: UserProfile)
     fun getUserProfileFlow(userId: String = currentUserId): Flow<UserProfile?>
 
+    /** Writes all ratings in one batch, overwriting earlier ones. Throws if the write fails. */
     suspend fun submitRatings(groupId: String, ratings: List<MemberRating>)
 }
