@@ -3,7 +3,13 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("com.google.gms.google-services")
+}
+
+// google-services.json holds the Firebase config and is kept out of git.
+// Apply the Google Services plugin only when the file is present; without it
+// the app still builds and runs on its built-in sample data.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
 }
 
 android {
