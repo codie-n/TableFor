@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
+import java.time.LocalDate
 import java.util.Locale
 
 /** One rating per group, rater and target, so submitting again overwrites instead of duplicating. */
@@ -115,18 +116,17 @@ class FirebaseTableForRepository : TableForRepository {
     }
 
     // --- Schedule Availability ---
-    override suspend fun updateAvailability(dayIndex: Int, timeSlot: String, isAvailable: Boolean) {
+    override suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, today: LocalDate) {
         val firestore = db ?: return
         try {
-            val slotKey = "${dayIndex}_${timeSlot}"
             val userAvailRef = firestore.collection("availability").document(currentUserId)
 
             firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(userAvailRef)
                 @Suppress("UNCHECKED_CAST")
-                val currentMap = (snapshot.get("slots") as? Map<String, Boolean>)?.toMutableMap() ?: mutableMapOf()
-                currentMap[slotKey] = isAvailable
-                transaction.set(userAvailRef, mapOf("slots" to currentMap))
+                val savedMap = (snapshot.get("slots") as? Map<String, Boolean>) ?: emptyMap()
+                val newMap = AvailabilityKeys.prune(savedMap, today) + (slotKey to isAvailable)
+                transaction.set(userAvailRef, mapOf("slots" to newMap))
             }.await()
         } catch (e: Exception) {
             e.printStackTrace()

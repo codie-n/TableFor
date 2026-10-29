@@ -10,7 +10,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.time.Clock
-import java.util.Calendar
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 class TableForViewModel(
@@ -71,18 +73,12 @@ class TableForViewModel(
                 }
             }
 
-            // Observe Schedule Availability
+            // Observe Schedule Availability. The grid shows exactly what's saved:
+            // old-format keys and past dates match no cell, so they're ignored.
             launch {
                 repository.getAvailabilityFlow().collect { cloudSlots ->
-                    if (cloudSlots.isNotEmpty()) {
-                        availabilityGrid = availabilityGrid.map { cell ->
-                            val key = "${cell.dayIndex}_${cell.timeSlot}"
-                            if (cloudSlots.containsKey(key)) {
-                                cell.copy(isAvailable = cloudSlots[key] == true)
-                            } else {
-                                cell
-                            }
-                        }
+                    availabilityGrid = availabilityGrid.map { cell ->
+                        cell.copy(isAvailable = cloudSlots[cell.slotKey] == true)
                     }
                 }
             }
@@ -90,18 +86,17 @@ class TableForViewModel(
     }
 
     private fun generateUpcomingWeekGrid() {
-        val timeSlots = listOf("5:00 PM", "5:30 PM", "6:00 PM", "6:30 PM", "7:00 PM", "7:30 PM", "8:00 PM", "8:30 PM", "9:00 PM", "9:30 PM", "10:00 PM")
-        val calendar = Calendar.getInstance()
-        val dateFormat = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
-        
+        val today = LocalDate.now(clock)
+        val dateFormat = DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())
+
         val cells = mutableListOf<AvailabilityCell>()
         for (dayIdx in 0..6) {
-            val dayLabel = dateFormat.format(calendar.time)
-            for (timeSlot in timeSlots) {
+            val date = today.plusDays(dayIdx.toLong())
+            val dayLabel = date.format(dateFormat)
+            for ((time, timeSlot) in TIME_SLOTS) {
                 val isAvail = (dayIdx == 3 || dayIdx == 4) && (timeSlot == "7:00 PM" || timeSlot == "8:00 PM")
-                cells.add(AvailabilityCell(dayIndex = dayIdx, dayLabel = dayLabel, timeSlot = timeSlot, isAvailable = isAvail))
+                cells.add(AvailabilityCell(date = date, time = time, dayIndex = dayIdx, dayLabel = dayLabel, timeSlot = timeSlot, isAvailable = isAvail))
             }
-            calendar.add(Calendar.DAY_OF_YEAR, 1)
         }
         availabilityGrid = cells
     }
@@ -136,18 +131,13 @@ class TableForViewModel(
     }
 
     fun toggleAvailability(dayIndex: Int, timeSlot: String) {
-        var updatedStatus = false
+        val target = availabilityGrid.find { it.dayIndex == dayIndex && it.timeSlot == timeSlot } ?: return
+        val newStatus = !target.isAvailable
         availabilityGrid = availabilityGrid.map { cell ->
-            if (cell.dayIndex == dayIndex && cell.timeSlot == timeSlot) {
-                val newStatus = !cell.isAvailable
-                updatedStatus = newStatus
-                cell.copy(isAvailable = newStatus)
-            } else {
-                cell
-            }
+            if (cell == target) cell.copy(isAvailable = newStatus) else cell
         }
         viewModelScope.launch {
-            repository.updateAvailability(dayIndex, timeSlot, updatedStatus)
+            repository.updateAvailability(target.slotKey, newStatus, LocalDate.now(clock))
         }
     }
 
@@ -205,6 +195,21 @@ class TableForViewModel(
 
     private companion object {
         const val TAG = "TableForViewModel"
+
+        /** Dinner slots: start time and the label shown on the Schedule screen. */
+        val TIME_SLOTS = listOf(
+            LocalTime.of(17, 0) to "5:00 PM",
+            LocalTime.of(17, 30) to "5:30 PM",
+            LocalTime.of(18, 0) to "6:00 PM",
+            LocalTime.of(18, 30) to "6:30 PM",
+            LocalTime.of(19, 0) to "7:00 PM",
+            LocalTime.of(19, 30) to "7:30 PM",
+            LocalTime.of(20, 0) to "8:00 PM",
+            LocalTime.of(20, 30) to "8:30 PM",
+            LocalTime.of(21, 0) to "9:00 PM",
+            LocalTime.of(21, 30) to "9:30 PM",
+            LocalTime.of(22, 0) to "10:00 PM"
+        )
     }
 }
 

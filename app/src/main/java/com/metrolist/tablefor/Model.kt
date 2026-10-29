@@ -1,6 +1,9 @@
 package com.metrolist.tablefor
 
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
+import java.time.LocalDate
+import java.time.LocalTime
 
 @Serializable
 data class UserProfile(
@@ -17,11 +20,16 @@ data class UserProfile(
 
 @Serializable
 data class AvailabilityCell(
-    val dayIndex: Int, // 0 to 6 (representing upcoming 7 days)
+    @Contextual val date: LocalDate, // the real calendar date of this slot
+    @Contextual val time: LocalTime, // slot start, local time
+    val dayIndex: Int, // 0 to 6: position in the upcoming week, for the day picker
     val dayLabel: String, // e.g., "Mon, Oct 13"
     val timeSlot: String, // e.g., "6:30 PM"
     val isAvailable: Boolean
-)
+) {
+    /** Key this slot is saved under, e.g. "2026-10-30_19:00". */
+    val slotKey: String get() = AvailabilityKeys.key(date, time)
+}
 
 @Serializable
 data class DinnerGroup(

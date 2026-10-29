@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
+import java.time.LocalDate
 
 /** A listener stream the test drives by hand: emit values, or fail it like a denied Firestore listener. */
 class FakeStream<T> {
@@ -33,7 +34,7 @@ class FakeTableForRepository(
     val calls = mutableListOf<String>()
 
     val savedProfiles = mutableListOf<UserProfile>()
-    val availabilityWrites = mutableListOf<Triple<Int, String, Boolean>>()
+    val availabilityWrites = mutableListOf<Triple<String, Boolean, LocalDate>>()
     val sentMessages = mutableListOf<String>()
     val ratingSubmissions = mutableListOf<List<MemberRating>>()
 
@@ -56,9 +57,9 @@ class FakeTableForRepository(
         sentMessages += text
     }
 
-    override suspend fun updateAvailability(dayIndex: Int, timeSlot: String, isAvailable: Boolean) {
+    override suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, today: LocalDate) {
         calls += "updateAvailability"
-        availabilityWrites += Triple(dayIndex, timeSlot, isAvailable)
+        availabilityWrites += Triple(slotKey, isAvailable, today)
     }
 
     override fun getAvailabilityFlow(userId: String): Flow<Map<String, Boolean>> {

@@ -1,6 +1,7 @@
 package com.metrolist.tablefor
 
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
 
 /**
  * Backend access for the ViewModel. [FirebaseTableForRepository] is the real
@@ -15,7 +16,12 @@ interface TableForRepository {
     fun getChatMessagesFlow(groupId: String): Flow<List<ChatMessage>>
     suspend fun sendMessage(groupId: String, text: String, senderName: String)
 
-    suspend fun updateAvailability(dayIndex: Int, timeSlot: String, isAvailable: Boolean)
+    /**
+     * Saves one slot under [slotKey] (see [AvailabilityKeys]) and drops old-format
+     * keys and dates before [today] from the saved map.
+     */
+    suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, today: LocalDate)
+    /** Saved slots, keyed by [AvailabilityKeys]. */
     fun getAvailabilityFlow(userId: String = currentUserId): Flow<Map<String, Boolean>>
 
     suspend fun saveProfile(profile: UserProfile)
