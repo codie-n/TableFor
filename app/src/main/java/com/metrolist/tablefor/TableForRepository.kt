@@ -1,226 +1,25 @@
 package com.metrolist.tablefor
 
-import com.google.firebase.Timestamp
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
-import java.text.SimpleDateFormat
-import java.util.Locale
 
-class TableForRepository {
-
-    private val db: FirebaseFirestore? by lazy {
-        try {
-            FirebaseFirestore.getInstance()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
-    private val auth: FirebaseAuth? by lazy {
-        try {
-            FirebaseAuth.getInstance()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
+/**
+ * Backend access for the ViewModel. [FirebaseTableForRepository] is the real
+ * implementation; tests use a fake.
+ */
+interface TableForRepository {
     val currentUserId: String
-        get() = auth?.currentUser?.uid ?: "user_1"
-
     val isFirebaseAvailable: Boolean
-        get() = db != null && auth != null
 
-    // --- Authentication ---
-    suspend fun signInAnonymously() {
-        try {
-            val a = auth ?: return
-            if (a.currentUser == null) {
-                a.signInAnonymously().await()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
+    suspend fun signInAnonymously()
 
-    // --- Realtime Chat ---
-    fun getChatMessagesFlow(groupId: String): Flow<List<ChatMessage>> = callbackFlow {
-        val firestore = db
-        if (firestore == null) {
-            close()
-            return@callbackFlow
-        }
+    fun getChatMessagesFlow(groupId: String): Flow<List<ChatMessage>>
+    suspend fun sendMessage(groupId: String, text: String, senderName: String)
 
-        val listenerRegistration = firestore.collection("groups")
-            .document(groupId)
-            .collection("messages")
-            .orderBy("timestamp", Query.Direction.ASCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
+    suspend fun updateAvailability(dayIndex: Int, timeSlot: String, isAvailable: Boolean)
+    fun getAvailabilityFlow(userId: String = currentUserId): Flow<Map<String, Boolean>>
 
-                val messages = snapshot?.documents?.mapNotNull { doc ->
-                    val senderId = doc.getString("senderId") ?: ""
-                    val senderName = doc.getString("senderName") ?: "Unknown"
-                    val text = doc.getString("text") ?: ""
-                    val timeDate = doc.getTimestamp("timestamp")?.toDate()
-                    val formattedTime: String = if (timeDate != null) {
-                        SimpleDateFormat("h:mm a", Locale.getDefault()).format(timeDate)
-                    } else ""
+    suspend fun saveProfile(profile: UserProfile)
+    fun getUserProfileFlow(userId: String = currentUserId): Flow<UserProfile?>
 
-                    ChatMessage(
-                        id = doc.id,
-                        senderName = senderName,
-                        text = text,
-                        timestamp = formattedTime,
-                        isMe = senderId == currentUserId
-                    )
-                } ?: emptyList()
-
-                trySend(messages)
-            }
-
-        awaitClose { listenerRegistration.remove() }
-    }
-
-    suspend fun sendMessage(groupId: String, text: String, senderName: String) {
-        val firestore = db ?: return
-        try {
-            val messageData = mapOf(
-                "senderId" to currentUserId,
-                "senderName" to senderName,
-                "text" to text,
-                "timestamp" to Timestamp.now()
-            )
-            firestore.collection("groups")
-                .document(groupId)
-                .collection("messages")
-                .add(messageData)
-                .await()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    // --- Schedule Availability ---
-    suspend fun updateAvailability(dayIndex: Int, timeSlot: String, isAvailable: Boolean) {
-        val firestore = db ?: return
-        try {
-            val slotKey = "${dayIndex}_${timeSlot}"
-            val userAvailRef = firestore.collection("availability").document(currentUserId)
-
-            firestore.runTransaction { transaction ->
-                val snapshot = transaction.get(userAvailRef)
-                @Suppress("UNCHECKED_CAST")
-                val currentMap = (snapshot.get("slots") as? Map<String, Boolean>)?.toMutableMap() ?: mutableMapOf()
-                currentMap[slotKey] = isAvailable
-                transaction.set(userAvailRef, mapOf("slots" to currentMap))
-            }.await()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    fun getAvailabilityFlow(userId: String = currentUserId): Flow<Map<String, Boolean>> = callbackFlow {
-        val firestore = db
-        if (firestore == null) {
-            close()
-            return@callbackFlow
-        }
-
-        val listener = firestore.collection("availability").document(userId)
-            .addSnapshotListener { snapshot, _ ->
-                @Suppress("UNCHECKED_CAST")
-                val slots = snapshot?.get("slots") as? Map<String, Boolean> ?: emptyMap()
-                trySend(slots)
-            }
-        awaitClose { listener.remove() }
-    }
-
-    // --- User Profile ---
-    suspend fun saveProfile(profile: UserProfile) {
-        val firestore = db ?: return
-        try {
-            val profileData = mapOf(
-                "id" to currentUserId,
-                "name" to profile.name,
-                "bio" to profile.bio,
-                "location" to profile.location,
-                "diets" to profile.diets,
-                "cuisinePreferences" to profile.cuisinePreferences,
-                "budget" to profile.budget,
-                "trustRating" to profile.trustRating,
-                "totalRatings" to profile.totalRatings
-            )
-            firestore.collection("users")
-                .document(currentUserId)
-                .set(profileData)
-                .await()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    fun getUserProfileFlow(userId: String = currentUserId): Flow<UserProfile?> = callbackFlow {
-        val firestore = db
-        if (firestore == null) {
-            close()
-            return@callbackFlow
-        }
-
-        val listener = firestore.collection("users").document(userId)
-            .addSnapshotListener { snapshot, _ ->
-                if (snapshot != null && snapshot.exists()) {
-                    @Suppress("UNCHECKED_CAST")
-                    val profile = UserProfile(
-                        id = userId,
-                        name = snapshot.getString("name") ?: "Alex Chen",
-                        bio = snapshot.getString("bio") ?: "",
-                        location = snapshot.getString("location") ?: "",
-                        diets = (snapshot.get("diets") as? List<String>) ?: emptyList(),
-                        cuisinePreferences = (snapshot.get("cuisinePreferences") as? List<String>) ?: emptyList(),
-                        budget = snapshot.getString("budget") ?: "$$ (Moderate)",
-                        trustRating = snapshot.getDouble("trustRating")?.toFloat() ?: 4.8f,
-                        totalRatings = snapshot.getLong("totalRatings")?.toInt() ?: 12
-                    )
-                    trySend(profile)
-                } else {
-                    trySend(null)
-                }
-            }
-        awaitClose { listener.remove() }
-    }
-
-    // --- Member Ratings ---
-    suspend fun submitRatings(groupId: String, ratings: List<MemberRating>) {
-        val firestore = db ?: return
-        try {
-            for (rating in ratings) {
-                val ratingData = mapOf(
-                    "raterId" to currentUserId,
-                    "targetMemberId" to rating.memberId,
-                    "memberName" to rating.memberName,
-                    "groupId" to groupId,
-                    "punctuality" to rating.punctuality,
-                    "friendliness" to rating.friendliness,
-                    "reliability" to rating.reliability,
-                    "notes" to rating.notes,
-                    "timestamp" to Timestamp.now()
-                )
-                firestore.collection("ratings")
-                    .add(ratingData)
-                    .await()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
+    suspend fun submitRatings(groupId: String, ratings: List<MemberRating>)
 }

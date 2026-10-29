@@ -7,11 +7,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.time.Clock
 import java.util.Calendar
 import java.util.Locale
 
 class TableForViewModel(
-    private val repository: TableForRepository = TableForRepository()
+    private val repository: TableForRepository = FirebaseTableForRepository(),
+    private val clock: Clock = Clock.systemDefaultZone()
 ) : ViewModel() {
 
     var profile by mutableStateOf(UserProfile())
