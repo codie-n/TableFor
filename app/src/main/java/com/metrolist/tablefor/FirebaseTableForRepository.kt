@@ -1,6 +1,7 @@
 package com.metrolist.tablefor
 
 import android.util.Log
+import com.google.firebase.FirebaseApp
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -60,21 +61,43 @@ internal fun ownMessageDelivery(hasPendingWrites: Boolean): Delivery =
 
 class FirebaseTableForRepository : TableForRepository {
 
-    private val db: FirebaseFirestore? by lazy {
+    /**
+     * The default Firebase app, or null when there's none. Without Firebase config
+     * (no google-services.json) that's expected: one log line, no stack trace, and
+     * the app runs on sample data.
+     */
+    private val firebaseApp: FirebaseApp? by lazy {
         try {
-            FirebaseFirestore.getInstance()
+            FirebaseApp.getInstance()
+        } catch (e: IllegalStateException) {
+            // Thrown when no default app was set up, which is what missing config means.
+            Log.i(TAG, "Firebase not configured; running on sample data")
+            null
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "Firebase failed to start; running on sample data", e)
             null
         }
     }
 
+    private val db: FirebaseFirestore? by lazy {
+        firebaseApp?.let { app ->
+            try {
+                FirebaseFirestore.getInstance(app)
+            } catch (e: Exception) {
+                Log.w(TAG, "Firestore failed to start; running on sample data", e)
+                null
+            }
+        }
+    }
+
     private val auth: FirebaseAuth? by lazy {
-        try {
-            FirebaseAuth.getInstance()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
+        firebaseApp?.let { app ->
+            try {
+                FirebaseAuth.getInstance(app)
+            } catch (e: Exception) {
+                Log.w(TAG, "Firebase Auth failed to start; running on sample data", e)
+                null
+            }
         }
     }
 
@@ -177,8 +200,10 @@ class FirebaseTableForRepository : TableForRepository {
                 .collection("messages")
                 .add(messageData)
                 .await()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "Sending message failed", e)
         }
     }
 
