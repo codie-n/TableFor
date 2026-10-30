@@ -858,7 +858,9 @@ fun ChatScreen(viewModel: TableForViewModel, onOpenProfile: () -> Unit = {}) {
                         Text("Profile")
                     }
                 } else {
-                    IconButton(
+                    // Material's filled colors: the theme's orange and white when enabled,
+                    // and the standard grey whenever it's disabled, as while the profile loads.
+                    FilledIconButton(
                         onClick = {
                             if (inputMessage.isNotBlank()) {
                                 viewModel.sendMessage(inputMessage)
@@ -866,11 +868,9 @@ fun ChatScreen(viewModel: TableForViewModel, onOpenProfile: () -> Unit = {}) {
                             }
                         },
                         enabled = canChat,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                        modifier = Modifier.size(48.dp)
                     ) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Send, contentDescription = "Send", modifier = Modifier.size(20.dp))
                     }
                 }
             }
