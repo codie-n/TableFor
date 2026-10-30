@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -27,6 +28,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -41,6 +44,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.tooling.preview.Preview
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
 
@@ -57,6 +61,9 @@ data class NavigationItem(val title: String, val screen: Screen, val icon: Image
 
 /** Shown when the server hasn't confirmed a save yet; Firestore sends it when the connection returns. */
 private const val SAVED_ON_PHONE_MESSAGE = "Saved on this phone — will sync when you're back online"
+
+/** List key of the Profile card that holds the name field. */
+private const val PERSONAL_INFO_ITEM = "personal_info"
 
 class MainActivity : ComponentActivity() {
     private val viewModel: TableForViewModel by viewModels()
@@ -119,6 +126,9 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
 
     var currentRouteTitle by remember { mutableStateOf("Profile & Preferences") }
 
+    // Set by the chat's Profile button: Profile then opens at the top with the name field focused.
+    var focusProfileName by remember { mutableStateOf(false) }
+
     fun navigateTo(screen: Screen) {
         currentRouteTitle = when (screen) {
             is Screen.Profile -> "Profile & Preferences"
@@ -172,7 +182,11 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable<Screen.Profile> {
-                ProfileScreen(viewModel = viewModel)
+                ProfileScreen(
+                    viewModel = viewModel,
+                    focusName = focusProfileName,
+                    onNameFocused = { focusProfileName = false }
+                )
             }
             composable<Screen.Schedule> {
                 ScheduleScreen(viewModel = viewModel)
@@ -181,7 +195,10 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
                 MatchScreen(viewModel = viewModel)
             }
             composable<Screen.Chat> {
-                ChatScreen(viewModel = viewModel, onOpenProfile = { navigateTo(Screen.Profile) })
+                ChatScreen(viewModel = viewModel, onOpenProfile = {
+                    focusProfileName = true
+                    navigateTo(Screen.Profile)
+                })
             }
             composable<Screen.Rate> {
                 RatingScreen(viewModel = viewModel)
@@ -214,9 +231,28 @@ fun SyncStatusStrip(status: SyncStatus) {
     }
 }
 
+/**
+ * [focusName]: scroll to the top and focus the name field, then call [onNameFocused].
+ * The chat's Profile button asks for this; the bottom bar doesn't, so it keeps the scroll position.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ProfileScreen(viewModel: TableForViewModel) {
+fun ProfileScreen(
+    viewModel: TableForViewModel,
+    focusName: Boolean = false,
+    onNameFocused: () -> Unit = {}
+) {
+    val listState = rememberLazyListState()
+    val nameFocus = remember { FocusRequester() }
+    LaunchedEffect(focusName) {
+        if (!focusName) return@LaunchedEffect
+        listState.scrollToItem(0)
+        // Focus only once the name field is laid out, so the request has a target.
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == PERSONAL_INFO_ITEM } }.first { it }
+        nameFocus.requestFocus()
+        onNameFocused()
+    }
+
     val profile = viewModel.profile
     val loaded = viewModel.profileLoaded
     val saveState = viewModel.profileSaveState
@@ -231,6 +267,7 @@ fun ProfileScreen(viewModel: TableForViewModel) {
     val budgets = listOf("$ (Budget)", "$$ (Moderate)", "$$$ (Upscale)")
 
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
@@ -270,7 +307,7 @@ fun ProfileScreen(viewModel: TableForViewModel) {
             }
         }
 
-        item {
+        item(key = PERSONAL_INFO_ITEM) {
             Card(
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
@@ -284,7 +321,9 @@ fun ProfileScreen(viewModel: TableForViewModel) {
                         label = { Text("Full Name") },
                         enabled = loaded,
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(nameFocus)
                     )
                     OutlinedTextField(
                         value = location,
