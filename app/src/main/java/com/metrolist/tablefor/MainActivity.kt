@@ -339,7 +339,7 @@ fun ProfileScreen(
                     OutlinedTextField(
                         value = location,
                         onValueChange = { location = it },
-                        label = { Text("City / Neighborhood (e.g., Downtown)") },
+                        label = { Text("City / Neighborhood (e.g., Mānoa)") },
                         enabled = loaded,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
