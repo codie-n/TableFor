@@ -393,7 +393,8 @@ class TableForViewModel(
             text = text,
             timestamp = currentTimestamp,
             isMe = true,
-            isRead = true
+            // In sample mode it never leaves the phone, so only the time shows.
+            delivery = if (sampleMode) null else Delivery.Sending
         )
         chatMessages = chatMessages + newMsg
 

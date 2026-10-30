@@ -5,6 +5,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CancellationException
@@ -52,6 +53,10 @@ internal fun profileFromFirestore(userId: String, data: Map<String, Any?>): User
  */
 internal fun availabilityUpdate(slotKey: String, isAvailable: Boolean, staleKeys: Set<String>): Map<String, Any> =
     mapOf("slots" to staleKeys.associateWith<String, Any> { FieldValue.delete() } + (slotKey to isAvailable))
+
+/** Your own message's delivery: while Firestore has a pending write for it, it's only on this phone. */
+internal fun ownMessageDelivery(hasPendingWrites: Boolean): Delivery =
+    if (hasPendingWrites) Delivery.Sending else Delivery.Sent
 
 class FirebaseTableForRepository : TableForRepository {
 
@@ -116,7 +121,9 @@ class FirebaseTableForRepository : TableForRepository {
             .document(groupId)
             .collection("messages")
             .orderBy("timestamp", Query.Direction.ASCENDING)
-            .addSnapshotListener { snapshot, error ->
+            // With metadata changes, a message is reported again once the server has it,
+            // so its delivery moves from Sending to Sent.
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
                 if (error != null) {
                     Log.w(TAG, "Chat listener failed", error)
                     close(error)
@@ -135,12 +142,14 @@ class FirebaseTableForRepository : TableForRepository {
                             SimpleDateFormat("h:mm a", Locale.getDefault()).format(timeDate)
                         } else ""
 
+                        val isMe = senderId == currentUserId
                         ChatMessage(
                             id = doc.id,
                             senderName = senderName,
                             text = text,
                             timestamp = formattedTime,
-                            isMe = senderId == currentUserId
+                            isMe = isMe,
+                            delivery = if (isMe) ownMessageDelivery(doc.metadata.hasPendingWrites()) else null
                         )
                     } ?: emptyList()
 

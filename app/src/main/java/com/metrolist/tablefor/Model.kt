@@ -88,8 +88,17 @@ data class ChatMessage(
     val text: String,
     val timestamp: String,
     val isMe: Boolean,
-    val isRead: Boolean = true
+    /** Your own message's delivery, or null when none is shown: others' messages and sample mode. */
+    val delivery: Delivery? = null
 )
+
+/** How far your own chat message has got. Nothing tracks whether anyone has read it. */
+enum class Delivery {
+    /** Firestore has it only on this phone (a pending write). */
+    Sending,
+    /** The server has it. */
+    Sent
+}
 
 data class MemberRating(
     val memberId: String,

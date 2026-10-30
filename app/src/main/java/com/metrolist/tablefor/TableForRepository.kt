@@ -22,6 +22,7 @@ interface TableForRepository {
     /** Signs in if needed. Returns the user ID, or null if Firebase is unavailable or sign-in failed. */
     suspend fun signIn(): String?
 
+    /** The group's messages, oldest first. Your own carry their [Delivery], reported again once the server has them. */
     fun getChatMessagesFlow(groupId: String): Flow<List<ChatMessage>>
     suspend fun sendMessage(groupId: String, text: String, senderName: String)
 

@@ -761,6 +761,13 @@ fun MatchScreen(viewModel: TableForViewModel) {
     }
 }
 
+/** The line under a chat message: its time, plus your own message's delivery when there is one. */
+internal fun chatTimeLabel(msg: ChatMessage): String = when (msg.delivery) {
+    null -> msg.timestamp
+    Delivery.Sending -> "${msg.timestamp}  Sending…"
+    Delivery.Sent -> "${msg.timestamp}  Sent ✓"
+}
+
 @Composable
 fun ChatScreen(viewModel: TableForViewModel, onOpenProfile: () -> Unit = {}) {
     val messages = viewModel.chatMessages
@@ -816,11 +823,7 @@ fun ChatScreen(viewModel: TableForViewModel, onOpenProfile: () -> Unit = {}) {
                                 Text(msg.text, color = if (msg.isMe) MaterialTheme.colorScheme.onPrimaryContainer else Color.Black, fontSize = 15.sp)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = if (msg.isMe) {
-                                        if (msg.isRead) "${msg.timestamp}  Read ✓✓" else "${msg.timestamp}  Sent ✓"
-                                    } else {
-                                        msg.timestamp
-                                    },
+                                    text = chatTimeLabel(msg),
                                     fontSize = 10.sp,
                                     color = Color.Gray,
                                     modifier = Modifier.align(Alignment.End)
