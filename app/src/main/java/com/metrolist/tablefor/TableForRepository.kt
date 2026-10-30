@@ -1,7 +1,6 @@
 package com.metrolist.tablefor
 
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDate
 
 /**
  * Backend access for the ViewModel. [FirebaseTableForRepository] is the real
@@ -12,6 +11,10 @@ import java.time.LocalDate
  *
  * Nothing is read or written without a signed-in user: listener streams end
  * at once, and writes do nothing or throw.
+ *
+ * Writes return when the server confirms them and throw if it rejects them;
+ * [sendMessage] only logs a failure. Offline, Firestore queues writes on the
+ * phone and they wait for the connection.
  */
 interface TableForRepository {
     val isFirebaseAvailable: Boolean
@@ -23,10 +26,10 @@ interface TableForRepository {
     suspend fun sendMessage(groupId: String, text: String, senderName: String)
 
     /**
-     * Saves one slot under [slotKey] (see [AvailabilityKeys]) and drops old-format
-     * keys and dates before [today] from the saved map.
+     * Saves one slot under [slotKey] (see [AvailabilityKeys]) and deletes [staleKeys]
+     * from the saved map, leaving the other slots as they are. Throws if the write fails.
      */
-    suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, today: LocalDate)
+    suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, staleKeys: Set<String>)
     /** Saved slots, keyed by [AvailabilityKeys]. */
     fun getAvailabilityFlow(userId: String): Flow<Map<String, Boolean>>
 

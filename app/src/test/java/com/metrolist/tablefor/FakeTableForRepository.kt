@@ -4,7 +4,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
-import java.time.LocalDate
 
 /** A listener stream the test drives by hand: emit values, or fail it like a denied Firestore listener. */
 class FakeStream<T> {
@@ -20,6 +19,9 @@ class FakeStream<T> {
     }
 }
 
+/** One updateAvailability call. */
+data class AvailabilityWrite(val slotKey: String, val isAvailable: Boolean, val staleKeys: Set<String>)
+
 /** In-memory repository that records every call the ViewModel makes. */
 class FakeTableForRepository(
     override val isFirebaseAvailable: Boolean = true,
@@ -33,7 +35,7 @@ class FakeTableForRepository(
     val calls = mutableListOf<String>()
 
     val savedProfiles = mutableListOf<UserProfile>()
-    val availabilityWrites = mutableListOf<Triple<String, Boolean, LocalDate>>()
+    val availabilityWrites = mutableListOf<AvailabilityWrite>()
     val sentMessages = mutableListOf<String>()
     val ratingSubmissions = mutableListOf<List<MemberRating>>()
 
@@ -63,9 +65,13 @@ class FakeTableForRepository(
         sentMessages += text
     }
 
-    override suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, today: LocalDate) {
+    /** When set, updateAvailability throws it, like a write the server rejected. */
+    var availabilityError: Throwable? = null
+
+    override suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, staleKeys: Set<String>) {
         calls += "updateAvailability"
-        availabilityWrites += Triple(slotKey, isAvailable, today)
+        availabilityWrites += AvailabilityWrite(slotKey, isAvailable, staleKeys)
+        availabilityError?.let { throw it }
     }
 
     override fun getAvailabilityFlow(userId: String): Flow<Map<String, Boolean>> {

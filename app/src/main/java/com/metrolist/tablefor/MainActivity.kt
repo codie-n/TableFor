@@ -48,6 +48,9 @@ import kotlinx.serialization.Serializable
 
 data class NavigationItem(val title: String, val screen: Screen, val icon: ImageVector)
 
+/** Shown when the server hasn't confirmed a save yet; Firestore sends it when the connection returns. */
+private const val SAVED_ON_PHONE_MESSAGE = "Saved on this phone — will sync when you're back online"
+
 class MainActivity : ComponentActivity() {
     private val viewModel: TableForViewModel by viewModels()
 
@@ -370,6 +373,9 @@ fun ProfileScreen(viewModel: TableForViewModel) {
             if (saveState == SaveState.Saved) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Profile saved successfully!", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+            } else if (saveState == SaveState.SavedOnPhone) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(SAVED_ON_PHONE_MESSAGE, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
             } else if (saveState == SaveState.Failed) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Couldn't save your profile. Check your connection and try again.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
@@ -825,6 +831,9 @@ fun RatingScreen(viewModel: TableForViewModel) {
             if (submitState == SaveState.Saved) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Thank you! Ratings submitted successfully.", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+            } else if (submitState == SaveState.SavedOnPhone) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(SAVED_ON_PHONE_MESSAGE, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
             } else if (submitState == SaveState.Failed) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Couldn't submit your ratings. Check your connection and try again.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)

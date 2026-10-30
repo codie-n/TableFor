@@ -3,6 +3,7 @@ package com.metrolist.tablefor
 import android.util.Log
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
@@ -12,7 +13,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
-import java.time.LocalDate
 import java.util.Locale
 
 /** One rating per group, rater and target, so submitting again overwrites instead of duplicating. */
@@ -45,6 +45,13 @@ internal fun profileFromFirestore(userId: String, data: Map<String, Any?>): User
     trustRating = (data["trustRating"] as? Number)?.toFloat() ?: 0f,
     totalRatings = (data["totalRatings"] as? Number)?.toInt() ?: 0
 )
+
+/**
+ * Fields for the merge write to `availability/{uid}`: sets one slot and deletes
+ * [staleKeys], leaving the other saved slots as they are.
+ */
+internal fun availabilityUpdate(slotKey: String, isAvailable: Boolean, staleKeys: Set<String>): Map<String, Any> =
+    mapOf("slots" to staleKeys.associateWith<String, Any> { FieldValue.delete() } + (slotKey to isAvailable))
 
 class FirebaseTableForRepository : TableForRepository {
 
@@ -166,22 +173,14 @@ class FirebaseTableForRepository : TableForRepository {
     }
 
     // --- Schedule Availability ---
-    override suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, today: LocalDate) {
-        val firestore = db ?: return
-        val uid = currentUserId ?: return
-        try {
-            val userAvailRef = firestore.collection("availability").document(uid)
-
-            firestore.runTransaction { transaction ->
-                val snapshot = transaction.get(userAvailRef)
-                @Suppress("UNCHECKED_CAST")
-                val savedMap = (snapshot.get("slots") as? Map<String, Boolean>) ?: emptyMap()
-                val newMap = AvailabilityKeys.prune(savedMap, today) + (slotKey to isAvailable)
-                transaction.set(userAvailRef, mapOf("slots" to newMap))
-            }.await()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+    override suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, staleKeys: Set<String>) {
+        val (firestore, uid) = requireSignedIn()
+        // A merge write, not a transaction: a transaction needs the server, while
+        // Firestore queues this write on the phone, so toggles work offline.
+        firestore.collection("availability")
+            .document(uid)
+            .set(availabilityUpdate(slotKey, isAvailable, staleKeys), SetOptions.merge())
+            .await()
     }
 
     override fun getAvailabilityFlow(userId: String): Flow<Map<String, Boolean>> = callbackFlow {

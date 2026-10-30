@@ -8,8 +8,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.time.Clock
 import java.time.LocalDate
@@ -65,6 +67,13 @@ class TableForViewModel(
     /** Your ID: the Firebase user ID once signed in, [LOCAL_USER_ID] before that and in sample mode. */
     private var myUserId = LOCAL_USER_ID
 
+    /** The last saved availability map received from the server. */
+    private var savedSlots: Map<String, Boolean> = emptyMap()
+
+    /** Count profile saves and rating submits, so only the latest one's result reaches the screen. */
+    private var profileSaves = 0
+    private var ratingSubmits = 0
+
     /** No Firebase or no signed-in user: everything stays on the device and nothing is read or written. */
     private val sampleMode: Boolean
         get() = syncStatus == SyncStatus.SampleData
@@ -112,6 +121,7 @@ class TableForViewModel(
             // The grid shows exactly what's saved: old-format keys and past
             // dates match no cell, so they're ignored.
             syncStream("Availability", repository.getAvailabilityFlow(userId)) { cloudSlots ->
+                savedSlots = cloudSlots
                 availabilityGrid = availabilityGrid.map { cell ->
                     cell.copy(isAvailable = cloudSlots[cell.slotKey] == true)
                 }
@@ -172,7 +182,10 @@ class TableForViewModel(
         }
     }
 
-    /** Runs a background write. Failures are logged; they never crash the app. */
+    /**
+     * Runs a background write that no screen waits for. A failure is logged and
+     * shown in the sync strip; it never crashes the app.
+     */
     private fun launchWrite(what: String, write: suspend () -> Unit) {
         viewModelScope.launch {
             try {
@@ -181,7 +194,46 @@ class TableForViewModel(
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "$what failed", e)
+                syncStatus = SyncStatus.SyncError
             }
+        }
+    }
+
+    /**
+     * Runs a write that a screen reports on. Firestore queues a write on the phone
+     * at once but finishes it only when the server confirms, which can't happen
+     * offline. If the server hasn't confirmed within [SERVER_WAIT_MILLIS],
+     * [onQueued] runs and the write carries on in the background.
+     *
+     * [onDone] gets the final outcome: null when the server confirmed, otherwise
+     * the error. A rejection that arrives after [onQueued] also sets
+     * [SyncStatus.SyncError], since the user may have left the screen by then.
+     */
+    private fun launchTrackedWrite(
+        what: String,
+        write: suspend () -> Unit,
+        onQueued: () -> Unit,
+        onDone: (error: Exception?) -> Unit
+    ) {
+        viewModelScope.launch {
+            val outcome = async {
+                try {
+                    write()
+                    null
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    e
+                }
+            }
+            val confirmedInTime = withTimeoutOrNull(SERVER_WAIT_MILLIS) { outcome.join() } != null
+            if (!confirmedInTime) onQueued()
+            val error = outcome.await()
+            if (error != null) {
+                Log.w(TAG, "$what failed", error)
+                if (!confirmedInTime) syncStatus = SyncStatus.SyncError
+            }
+            onDone(error)
         }
     }
 
@@ -194,17 +246,15 @@ class TableForViewModel(
             return
         }
         profileSaveState = SaveState.Saving
-        viewModelScope.launch {
-            profileSaveState = try {
-                repository.saveProfile(newProfile)
-                SaveState.Saved
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Saving profile failed", e)
-                SaveState.Failed
+        val save = ++profileSaves
+        launchTrackedWrite(
+            "Saving profile",
+            write = { repository.saveProfile(newProfile) },
+            onQueued = { if (save == profileSaves) profileSaveState = SaveState.SavedOnPhone },
+            onDone = { error ->
+                if (save == profileSaves) profileSaveState = if (error == null) SaveState.Saved else SaveState.Failed
             }
-        }
+        )
     }
 
     /** Diet, cuisine and budget taps: saved right away, without the Save button's message. */
@@ -241,8 +291,10 @@ class TableForViewModel(
             if (cell == target) cell.copy(isAvailable = newStatus) else cell
         }
         if (sampleMode) return
+        // Old-format keys and past dates in the last saved map are deleted with this write.
+        val staleKeys = AvailabilityKeys.staleKeys(savedSlots, LocalDate.now(clock))
         launchWrite("Saving availability") {
-            repository.updateAvailability(target.slotKey, newStatus, LocalDate.now(clock))
+            repository.updateAvailability(target.slotKey, newStatus, staleKeys)
         }
     }
 
@@ -288,22 +340,33 @@ class TableForViewModel(
         ratingsSubmitState = SaveState.Saving
         val submitted = memberRatings
         val groupId = dinnerGroup?.groupId ?: "group_101"
-        viewModelScope.launch {
-            ratingsSubmitState = try {
-                repository.submitRatings(groupId, submitted)
-                // If a slider moved while saving, the newest values aren't saved yet.
-                if (memberRatings == submitted) SaveState.Saved else SaveState.Idle
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Submitting ratings failed", e)
-                SaveState.Failed
+        val submit = ++ratingSubmits
+        // If a slider moved after Submit, the newest values aren't saved yet: no message.
+        launchTrackedWrite(
+            "Submitting ratings",
+            write = { repository.submitRatings(groupId, submitted) },
+            onQueued = {
+                if (submit == ratingSubmits) {
+                    ratingsSubmitState = if (memberRatings == submitted) SaveState.SavedOnPhone else SaveState.Idle
+                }
+            },
+            onDone = { error ->
+                if (submit == ratingSubmits) {
+                    ratingsSubmitState = when {
+                        error != null -> SaveState.Failed
+                        memberRatings == submitted -> SaveState.Saved
+                        else -> SaveState.Idle
+                    }
+                }
             }
-        }
+        )
     }
 
     private companion object {
         const val TAG = "TableForViewModel"
+
+        /** How long Save and Submit wait for the server before saying "Saved on this phone". */
+        const val SERVER_WAIT_MILLIS = 3_000L
 
         /** Dinner slots: start time and the label shown on the Schedule screen. */
         val TIME_SLOTS = listOf(
@@ -322,7 +385,16 @@ class TableForViewModel(
     }
 }
 
-enum class SaveState { Idle, Saving, Saved, Failed }
+enum class SaveState {
+    Idle,
+    /** Waiting for the server, for a few seconds at most. */
+    Saving,
+    /** The server confirmed it. */
+    Saved,
+    /** Queued on the phone; Firestore sends it when the connection returns. */
+    SavedOnPhone,
+    Failed
+}
 
 enum class SyncStatus {
     /** Signing in. */

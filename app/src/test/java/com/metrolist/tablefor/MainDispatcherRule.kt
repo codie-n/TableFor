@@ -16,4 +16,13 @@ class MainDispatcherRule(
 ) : TestWatcher() {
     override fun starting(description: Description) = Dispatchers.setMain(dispatcher)
     override fun finished(description: Description) = Dispatchers.resetMain()
+
+    /** Virtual time on the test scheduler, in milliseconds. */
+    val currentTime: Long get() = dispatcher.scheduler.currentTime
+
+    /** Moves virtual time forward and runs everything due by then. Nothing actually waits. */
+    fun advanceBy(millis: Long) {
+        dispatcher.scheduler.advanceTimeBy(millis)
+        dispatcher.scheduler.runCurrent()
+    }
 }

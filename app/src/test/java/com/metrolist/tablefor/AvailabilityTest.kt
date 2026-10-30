@@ -67,7 +67,7 @@ class AvailabilityTest {
 
         vm.toggleAvailability(1, "7:00 PM")
 
-        assertEquals(listOf(Triple("2026-10-30_19:00", true, LocalDate.of(2026, 10, 29))), repo.availabilityWrites)
+        assertEquals(listOf(AvailabilityWrite("2026-10-30_19:00", true, emptySet())), repo.availabilityWrites)
         assertTrue(vm.cell(1, "7:00 PM").isAvailable)
     }
 

@@ -28,4 +28,8 @@ object AvailabilityKeys {
     /** [slots] without old-format keys and without dates before [today]. */
     fun prune(slots: Map<String, Boolean>, today: LocalDate): Map<String, Boolean> =
         slots.filterKeys { key -> parse(key)?.first?.isBefore(today) == false }
+
+    /** The keys [prune] would drop: old-format keys and dates before [today]. */
+    fun staleKeys(slots: Map<String, Boolean>, today: LocalDate): Set<String> =
+        slots.keys - prune(slots, today).keys
 }
