@@ -36,7 +36,8 @@ class FakeTableForRepository(
 
     val savedProfiles = mutableListOf<UserProfile>()
     val availabilityWrites = mutableListOf<AvailabilityWrite>()
-    val sentMessages = mutableListOf<String>()
+    /** Sent chat messages as (sender name, text). */
+    val sentMessages = mutableListOf<Pair<String, String>>()
     val ratingSubmissions = mutableListOf<List<MemberRating>>()
 
     /** When set, submitRatings waits for it, so a test can look at the "saving" state. */
@@ -62,7 +63,7 @@ class FakeTableForRepository(
 
     override suspend fun sendMessage(groupId: String, text: String, senderName: String) {
         calls += "sendMessage"
-        sentMessages += text
+        sentMessages += senderName to text
     }
 
     /** When set, updateAvailability throws it, like a write the server rejected. */

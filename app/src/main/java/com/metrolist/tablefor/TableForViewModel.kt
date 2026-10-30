@@ -38,6 +38,14 @@ class TableForViewModel(
     var profileSaveState by mutableStateOf(SaveState.Idle)
         private set
 
+    /** You can chat once your saved profile has a name, so no message goes out without a sender. */
+    val canChat: Boolean
+        get() = profileLoaded && profile.name.isNotBlank()
+
+    /** Your profile has loaded without a name: the chat asks you to add one on the Profile tab. */
+    val chatNeedsName: Boolean
+        get() = profileLoaded && profile.name.isBlank()
+
     var availabilityGrid by mutableStateOf<List<AvailabilityCell>>(emptyList())
         private set
 
@@ -114,7 +122,7 @@ class TableForViewModel(
             val groupId = dinnerGroup?.groupId ?: "group_101"
             syncStream("Chat", repository.getChatMessagesFlow(groupId)) { cloudMessages ->
                 if (cloudMessages.isNotEmpty()) {
-                    chatMessages = cloudMessages
+                    chatMessages = cloudMessages.map(::withSenderName)
                 }
             }
 
@@ -299,7 +307,7 @@ class TableForViewModel(
     }
 
     fun sendMessage(text: String) {
-        if (text.isBlank()) return
+        if (text.isBlank() || !canChat) return
         val currentTimestamp = SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date())
         val newMsg = ChatMessage(
             id = System.currentTimeMillis().toString(),
@@ -316,6 +324,10 @@ class TableForViewModel(
         val senderName = profile.name
         launchWrite("Sending message") { repository.sendMessage(groupId, text, senderName) }
     }
+
+    /** Others' messages with a blank or missing sender name show as [UNNAMED_SENDER]. */
+    private fun withSenderName(message: ChatMessage): ChatMessage =
+        if (!message.isMe && message.senderName.isBlank()) message.copy(senderName = UNNAMED_SENDER) else message
 
     /** Slider moves change local state only; nothing is written until [submitRatings]. */
     fun updateRating(memberId: String, punctuality: Int, friendliness: Int, reliability: Int, notes: String) {
@@ -367,6 +379,9 @@ class TableForViewModel(
 
         /** How long Save and Submit wait for the server before saying "Saved on this phone". */
         const val SERVER_WAIT_MILLIS = 3_000L
+
+        /** Shown for a chat sender with no name. */
+        const val UNNAMED_SENDER = "Group member"
 
         /** Dinner slots: start time and the label shown on the Schedule screen. */
         val TIME_SLOTS = listOf(

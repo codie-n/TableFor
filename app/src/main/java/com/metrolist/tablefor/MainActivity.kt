@@ -88,6 +88,23 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
 
     var currentRouteTitle by remember { mutableStateOf("Profile & Preferences") }
 
+    fun navigateTo(screen: Screen) {
+        currentRouteTitle = when (screen) {
+            is Screen.Profile -> "Profile & Preferences"
+            is Screen.Schedule -> "Upcoming Week Schedule"
+            is Screen.Match -> "Matched Dinner Group"
+            is Screen.Chat -> "Group Chat"
+            is Screen.Rate -> "Post-Dinner Ratings"
+        }
+        navController.navigate(screen) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
     Scaffold(
         topBar = {
             Column {
@@ -112,22 +129,7 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
                         icon = { Icon(item.icon, contentDescription = item.title) },
                         label = { Text(item.title) },
                         selected = selected,
-                        onClick = {
-                            currentRouteTitle = when (item.screen) {
-                                is Screen.Profile -> "Profile & Preferences"
-                                is Screen.Schedule -> "Upcoming Week Schedule"
-                                is Screen.Match -> "Matched Dinner Group"
-                                is Screen.Chat -> "Group Chat"
-                                is Screen.Rate -> "Post-Dinner Ratings"
-                            }
-                            navController.navigate(item.screen) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
+                        onClick = { navigateTo(item.screen) }
                     )
                 }
             }
@@ -148,7 +150,7 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
                 MatchScreen(viewModel = viewModel)
             }
             composable<Screen.Chat> {
-                ChatScreen(viewModel = viewModel)
+                ChatScreen(viewModel = viewModel, onOpenProfile = { navigateTo(Screen.Profile) })
             }
             composable<Screen.Rate> {
                 RatingScreen(viewModel = viewModel)
@@ -662,9 +664,12 @@ fun MatchScreen(viewModel: TableForViewModel) {
 }
 
 @Composable
-fun ChatScreen(viewModel: TableForViewModel) {
+fun ChatScreen(viewModel: TableForViewModel, onOpenProfile: () -> Unit = {}) {
     val messages = viewModel.chatMessages
     var inputMessage by remember { mutableStateOf("") }
+    // Without a saved name you can't chat; the message box says so and links to Profile.
+    val canChat = viewModel.canChat
+    val needsName = viewModel.chatNeedsName
 
     Column(
         modifier = Modifier
@@ -734,29 +739,40 @@ fun ChatScreen(viewModel: TableForViewModel) {
                 OutlinedTextField(
                     value = inputMessage,
                     onValueChange = { inputMessage = it },
-                    placeholder = { Text("Message group...") },
+                    placeholder = { Text(if (needsName) "Add your name on the Profile tab to chat" else "Message group...") },
+                    enabled = canChat,
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.weight(1f),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = Color.Transparent,
+                        disabledBorderColor = Color.Transparent,
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                IconButton(
-                    onClick = {
-                        if (inputMessage.isNotBlank()) {
-                            viewModel.sendMessage(inputMessage)
-                            inputMessage = ""
-                        }
-                    },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(MaterialTheme.colorScheme.primary, CircleShape)
-                ) {
-                    Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+                if (needsName) {
+                    Button(onClick = onOpenProfile, shape = RoundedCornerShape(16.dp)) {
+                        Text("Profile")
+                    }
+                } else {
+                    IconButton(
+                        onClick = {
+                            if (inputMessage.isNotBlank()) {
+                                viewModel.sendMessage(inputMessage)
+                                inputMessage = ""
+                            }
+                        },
+                        enabled = canChat,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
                 }
             }
         }

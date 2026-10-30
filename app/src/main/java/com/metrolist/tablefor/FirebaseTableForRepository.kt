@@ -127,7 +127,8 @@ class FirebaseTableForRepository : TableForRepository {
                 try {
                     val messages = snapshot?.documents?.mapNotNull { doc ->
                         val senderId = doc.getString("senderId") ?: ""
-                        val senderName = doc.getString("senderName") ?: "Unknown"
+                        // A missing name reads as blank; the chat shows it as "Group member".
+                        val senderName = doc.getString("senderName") ?: ""
                         val text = doc.getString("text") ?: ""
                         val timeDate = doc.getTimestamp("timestamp")?.toDate()
                         val formattedTime: String = if (timeDate != null) {
