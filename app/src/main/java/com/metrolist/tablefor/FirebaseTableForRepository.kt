@@ -5,6 +5,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +18,33 @@ import java.util.Locale
 /** One rating per group, rater and target, so submitting again overwrites instead of duplicating. */
 internal fun ratingDocumentId(groupId: String, raterId: String, targetId: String): String =
     "${groupId}_${raterId}_${targetId}"
+
+/**
+ * Fields written to `users/{uid}` by a profile save. Never trustRating or
+ * totalRatings: those will be computed on the server (F10).
+ */
+internal fun profileToFirestore(userId: String, profile: UserProfile): Map<String, Any> = mapOf(
+    "id" to userId,
+    "name" to profile.name,
+    "bio" to profile.bio,
+    "location" to profile.location,
+    "diets" to profile.diets,
+    "cuisinePreferences" to profile.cuisinePreferences,
+    "budget" to profile.budget
+)
+
+/** A profile read from a `users/{uid}` document's fields. Missing fields are blank, never sample data. */
+internal fun profileFromFirestore(userId: String, data: Map<String, Any?>): UserProfile = UserProfile(
+    id = userId,
+    name = data["name"] as? String ?: "",
+    bio = data["bio"] as? String ?: "",
+    location = data["location"] as? String ?: "",
+    diets = (data["diets"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+    cuisinePreferences = (data["cuisinePreferences"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+    budget = data["budget"] as? String ?: "",
+    trustRating = (data["trustRating"] as? Number)?.toFloat() ?: 0f,
+    totalRatings = (data["totalRatings"] as? Number)?.toInt() ?: 0
+)
 
 class FirebaseTableForRepository : TableForRepository {
 
@@ -174,25 +202,11 @@ class FirebaseTableForRepository : TableForRepository {
     // --- User Profile ---
     override suspend fun saveProfile(profile: UserProfile) {
         val firestore = db ?: return
-        try {
-            val profileData = mapOf(
-                "id" to currentUserId,
-                "name" to profile.name,
-                "bio" to profile.bio,
-                "location" to profile.location,
-                "diets" to profile.diets,
-                "cuisinePreferences" to profile.cuisinePreferences,
-                "budget" to profile.budget,
-                "trustRating" to profile.trustRating,
-                "totalRatings" to profile.totalRatings
-            )
-            firestore.collection("users")
-                .document(currentUserId)
-                .set(profileData)
-                .await()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        // merge() keeps fields this save doesn't write, such as server-computed ratings.
+        firestore.collection("users")
+            .document(currentUserId)
+            .set(profileToFirestore(currentUserId, profile), SetOptions.merge())
+            .await()
     }
 
     override fun getUserProfileFlow(userId: String): Flow<UserProfile?> = callbackFlow {
@@ -212,19 +226,7 @@ class FirebaseTableForRepository : TableForRepository {
                 }
                 try {
                     if (snapshot != null && snapshot.exists()) {
-                        @Suppress("UNCHECKED_CAST")
-                        val profile = UserProfile(
-                            id = userId,
-                            name = snapshot.getString("name") ?: "Alex Chen",
-                            bio = snapshot.getString("bio") ?: "",
-                            location = snapshot.getString("location") ?: "",
-                            diets = (snapshot.get("diets") as? List<String>) ?: emptyList(),
-                            cuisinePreferences = (snapshot.get("cuisinePreferences") as? List<String>) ?: emptyList(),
-                            budget = snapshot.getString("budget") ?: "$$ (Moderate)",
-                            trustRating = snapshot.getDouble("trustRating")?.toFloat() ?: 4.8f,
-                            totalRatings = snapshot.getLong("totalRatings")?.toInt() ?: 12
-                        )
-                        trySend(profile)
+                        trySend(profileFromFirestore(userId, snapshot.data ?: emptyMap()))
                     } else {
                         trySend(null)
                     }

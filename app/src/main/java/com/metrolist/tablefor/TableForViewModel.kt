@@ -22,7 +22,18 @@ class TableForViewModel(
     private val clock: Clock = Clock.systemDefaultZone()
 ) : ViewModel() {
 
-    var profile by mutableStateOf(UserProfile())
+    private val firebaseAvailable = repository.isFirebaseAvailable
+
+    /** Sample data in sample mode; otherwise blank until the saved profile loads. */
+    var profile by mutableStateOf(if (firebaseAvailable) UserProfile.blank("") else UserProfile())
+        private set
+
+    /** False until the saved profile (or the sample one) is in [profile]. Saving waits for it. */
+    var profileLoaded by mutableStateOf(!firebaseAvailable)
+        private set
+
+    /** State of the last Save on the Profile screen. */
+    var profileSaveState by mutableStateOf(SaveState.Idle)
         private set
 
     var availabilityGrid by mutableStateOf<List<AvailabilityCell>>(emptyList())
@@ -47,7 +58,7 @@ class TableForViewModel(
         private set
 
     var syncStatus by mutableStateOf(
-        if (repository.isFirebaseAvailable) SyncStatus.Connecting else SyncStatus.SampleData
+        if (firebaseAvailable) SyncStatus.Connecting else SyncStatus.SampleData
     )
         private set
 
@@ -58,7 +69,7 @@ class TableForViewModel(
     }
 
     private fun initializeFirestoreSync() {
-        if (!repository.isFirebaseAvailable) return // sample mode; syncStatus already says so
+        if (!firebaseAvailable) return // sample mode; syncStatus and profile already say so
         viewModelScope.launch {
             val userId = try {
                 repository.signIn()
@@ -70,15 +81,17 @@ class TableForViewModel(
             }
             if (userId == null) {
                 syncStatus = SyncStatus.SampleData
+                profile = UserProfile()
+                profileLoaded = true
                 return@launch
             }
             syncStatus = SyncStatus.Synced
 
             // Each stream handles its own errors, so one failing never stops the others.
             syncStream("Profile", repository.getUserProfileFlow()) { cloudProfile ->
-                if (cloudProfile != null) {
-                    profile = cloudProfile
-                }
+                // No profile document yet: start blank, not with the sample profile.
+                profile = cloudProfile ?: UserProfile.blank(userId)
+                profileLoaded = true
             }
 
             val groupId = dinnerGroup?.groupId ?: "group_101"
@@ -139,7 +152,41 @@ class TableForViewModel(
         }
     }
 
+    /** Save button: writes the whole profile and reports the result in [profileSaveState]. */
+    fun saveProfile(newProfile: UserProfile) {
+        if (!profileLoaded || profileSaveState == SaveState.Saving) return
+        applyProfile(newProfile)
+        profileSaveState = SaveState.Saving
+        viewModelScope.launch {
+            profileSaveState = try {
+                repository.saveProfile(newProfile)
+                SaveState.Saved
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Saving profile failed", e)
+                SaveState.Failed
+            }
+        }
+    }
+
+    /** Diet, cuisine and budget taps: saved right away, without the Save button's message. */
     fun updateProfile(newProfile: UserProfile) {
+        if (!profileLoaded) return
+        applyProfile(newProfile)
+        viewModelScope.launch {
+            try {
+                repository.saveProfile(newProfile)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Saving preferences failed", e)
+            }
+        }
+    }
+
+    /** Shows [newProfile] locally, including your entry in the group. */
+    private fun applyProfile(newProfile: UserProfile) {
         profile = newProfile
         dinnerGroup = dinnerGroup?.let { group ->
             val updatedMembers = group.members.map { member ->
@@ -154,9 +201,6 @@ class TableForViewModel(
                 }
             }
             group.copy(members = updatedMembers)
-        }
-        viewModelScope.launch {
-            repository.saveProfile(newProfile)
         }
     }
 

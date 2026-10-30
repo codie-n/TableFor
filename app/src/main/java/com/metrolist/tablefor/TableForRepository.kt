@@ -28,7 +28,9 @@ interface TableForRepository {
     /** Saved slots, keyed by [AvailabilityKeys]. */
     fun getAvailabilityFlow(userId: String = currentUserId): Flow<Map<String, Boolean>>
 
+    /** Saves the editable profile fields, never trustRating or totalRatings. Throws if the write fails. */
     suspend fun saveProfile(profile: UserProfile)
+    /** The saved profile, or null when the user has no profile document yet. */
     fun getUserProfileFlow(userId: String = currentUserId): Flow<UserProfile?>
 
     /** Writes all ratings in one batch, overwriting earlier ones. Throws if the write fails. */

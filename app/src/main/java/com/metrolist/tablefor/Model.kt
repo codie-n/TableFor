@@ -16,7 +16,22 @@ data class UserProfile(
     val budget: String = "$$ (Moderate)",
     val trustRating: Float = 4.8f,
     val totalRatings: Int = 12
-)
+) {
+    companion object {
+        /** A signed-in user with no saved profile yet. The defaults above are sample data. */
+        fun blank(id: String) = UserProfile(
+            id = id,
+            name = "",
+            bio = "",
+            location = "",
+            diets = emptyList(),
+            cuisinePreferences = emptyList(),
+            budget = "",
+            trustRating = 0f,
+            totalRatings = 0
+        )
+    }
+}
 
 @Serializable
 data class AvailabilityCell(

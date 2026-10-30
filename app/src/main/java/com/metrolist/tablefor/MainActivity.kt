@@ -181,11 +181,13 @@ fun SyncStatusStrip(status: SyncStatus) {
 @Composable
 fun ProfileScreen(viewModel: TableForViewModel) {
     val profile = viewModel.profile
-    var name by remember { mutableStateOf(profile.name) }
-    var bio by remember { mutableStateOf(profile.bio) }
-    var location by remember { mutableStateOf(profile.location) }
-    var selectedBudget by remember { mutableStateOf(profile.budget) }
-    var savedMessage by remember { mutableStateOf(false) }
+    val loaded = viewModel.profileLoaded
+    val saveState = viewModel.profileSaveState
+    // Text the user is editing. Filled from the saved profile once it has loaded;
+    // chip and budget taps change the profile but never reset these fields.
+    var name by remember(loaded) { mutableStateOf(profile.name) }
+    var bio by remember(loaded) { mutableStateOf(profile.bio) }
+    var location by remember(loaded) { mutableStateOf(profile.location) }
 
     val diets = listOf("Vegetarian", "Vegan", "Halal", "Gluten-Free", "None")
     val cuisines = listOf("Italian", "Japanese", "Mexican", "Thai", "American", "Indian", "Mediterranean")
@@ -211,7 +213,10 @@ fun ProfileScreen(viewModel: TableForViewModel) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Trust & Reliability Score", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("${profile.trustRating} ★ (${profile.totalRatings} dinners)", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(
+                            if (profile.totalRatings == 0) "No ratings yet" else "${profile.trustRating} ★ (${profile.totalRatings} dinners)",
+                            style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text("High reliability tier - No-show protected", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
                     }
@@ -240,6 +245,7 @@ fun ProfileScreen(viewModel: TableForViewModel) {
                         value = name,
                         onValueChange = { name = it },
                         label = { Text("Full Name") },
+                        enabled = loaded,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -247,6 +253,7 @@ fun ProfileScreen(viewModel: TableForViewModel) {
                         value = location,
                         onValueChange = { location = it },
                         label = { Text("City / Neighborhood (e.g., Downtown)") },
+                        enabled = loaded,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
                         leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null) }
@@ -255,6 +262,7 @@ fun ProfileScreen(viewModel: TableForViewModel) {
                         value = bio,
                         onValueChange = { bio = it },
                         label = { Text("Bio / About Me") },
+                        enabled = loaded,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
                         maxLines = 3
@@ -284,6 +292,7 @@ fun ProfileScreen(viewModel: TableForViewModel) {
                                     val newDiets = if (selected) profile.diets - diet else profile.diets + diet
                                     viewModel.updateProfile(profile.copy(diets = newDiets))
                                 },
+                                enabled = loaded,
                                 label = { Text(diet) }
                             )
                         }
@@ -304,6 +313,7 @@ fun ProfileScreen(viewModel: TableForViewModel) {
                                     val newCuisines = if (selected) profile.cuisinePreferences - cuisine else profile.cuisinePreferences + cuisine
                                     viewModel.updateProfile(profile.copy(cuisinePreferences = newCuisines))
                                 },
+                                enabled = loaded,
                                 label = { Text(cuisine) }
                             )
                         }
@@ -325,19 +335,18 @@ fun ProfileScreen(viewModel: TableForViewModel) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    selectedBudget = b
+                                .clickable(enabled = loaded) {
                                     viewModel.updateProfile(profile.copy(budget = b))
                                 }
                                 .padding(horizontal = 8.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = (selectedBudget == b),
+                                selected = (profile.budget == b),
                                 onClick = {
-                                    selectedBudget = b
                                     viewModel.updateProfile(profile.copy(budget = b))
-                                }
+                                },
+                                enabled = loaded
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(b, fontWeight = FontWeight.Medium)
@@ -350,17 +359,20 @@ fun ProfileScreen(viewModel: TableForViewModel) {
         item {
             Button(
                 onClick = {
-                    viewModel.updateProfile(profile.copy(name = name, bio = bio, location = location, budget = selectedBudget))
-                    savedMessage = true
+                    viewModel.saveProfile(profile.copy(name = name, bio = bio, location = location))
                 },
+                enabled = loaded && saveState != SaveState.Saving,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(54.dp)
             ) {
                 Text("Save Profile & Preferences", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
-            if (savedMessage) {
+            if (saveState == SaveState.Saved) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Profile saved successfully!", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+            } else if (saveState == SaveState.Failed) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Couldn't save your profile. Check your connection and try again.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(32.dp))
         }

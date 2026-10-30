@@ -74,8 +74,15 @@ class FakeTableForRepository(
         return availabilityStream.flow
     }
 
+    /** When set, saveProfile waits for it. */
+    var saveProfileGate: CompletableDeferred<Unit>? = null
+    /** When set, saveProfile throws it. */
+    var saveProfileError: Throwable? = null
+
     override suspend fun saveProfile(profile: UserProfile) {
         calls += "saveProfile"
+        saveProfileGate?.await()
+        saveProfileError?.let { throw it }
         savedProfiles += profile
     }
 
