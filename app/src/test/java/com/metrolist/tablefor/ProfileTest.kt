@@ -45,10 +45,10 @@ class ProfileTest {
     }
 
     @Test
-    fun `sample mode keeps the Alex Chen sample profile`() {
+    fun `sample mode keeps the Steve Brown sample profile`() {
         val vm = TableForViewModel(FakeTableForRepository(isFirebaseAvailable = false), TEST_CLOCK)
 
-        assertEquals("Alex Chen", vm.profile.name)
+        assertEquals("Steve Brown", vm.profile.name)
         assertTrue(vm.profileLoaded)
     }
 
@@ -58,7 +58,7 @@ class ProfileTest {
 
         val vm = TableForViewModel(repo, TEST_CLOCK)
 
-        assertEquals("Alex Chen", vm.profile.name)
+        assertEquals("Steve Brown", vm.profile.name)
         assertTrue(vm.profileLoaded)
     }
 
