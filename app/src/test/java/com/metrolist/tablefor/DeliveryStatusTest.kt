@@ -1,5 +1,6 @@
 package com.metrolist.tablefor
 
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -46,9 +47,10 @@ class DeliveryStatusTest {
     }
 
     @Test
-    fun `a signed-in user's new message shows Sending until the chat reports it`() {
+    fun `a signed-in user's new message shows Sending while the server hasn't confirmed it`() {
         val vm = TableForViewModel(repo, TEST_CLOCK)
         repo.profileStream.emit(UserProfile.blank("uid_test").copy(name = "Kent"))
+        repo.sendGate = CompletableDeferred() // since B24, a send returns only once the server confirms it
 
         vm.sendMessage("Hi")
 

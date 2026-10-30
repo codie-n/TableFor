@@ -773,6 +773,7 @@ internal fun chatTimeLabel(msg: ChatMessage): String = when (msg.delivery) {
     null -> msg.timestamp
     Delivery.Sending -> "${msg.timestamp}  Sending…"
     Delivery.Sent -> "${msg.timestamp}  Sent ✓"
+    Delivery.NotSent -> "${msg.timestamp}  Not sent"
 }
 
 @Composable
@@ -1018,7 +1019,7 @@ private object NoBackendRepository : TableForRepository {
     override val isFirebaseAvailable = false
     override suspend fun signIn(): String? = null
     override fun getChatMessagesFlow(groupId: String): Flow<List<ChatMessage>> = emptyFlow()
-    override suspend fun sendMessage(groupId: String, text: String, senderName: String) {}
+    override suspend fun sendMessage(groupId: String, messageId: String, text: String, senderName: String) {}
     override suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, staleKeys: Set<String>) {}
     override fun getAvailabilityFlow(userId: String): Flow<Map<String, Boolean>> = emptyFlow()
     override suspend fun saveProfile(profile: UserProfile) {}

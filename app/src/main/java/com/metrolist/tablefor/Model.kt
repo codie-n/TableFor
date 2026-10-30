@@ -97,7 +97,9 @@ enum class Delivery {
     /** Firestore has it only on this phone (a pending write). */
     Sending,
     /** The server has it. */
-    Sent
+    Sent,
+    /** The server rejected it. It stays in the chat until the app restarts; nothing retries it. */
+    NotSent
 }
 
 data class MemberRating(

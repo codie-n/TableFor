@@ -61,9 +61,19 @@ class FakeTableForRepository(
         return chatStream.flow
     }
 
-    override suspend fun sendMessage(groupId: String, text: String, senderName: String) {
+    /** The document ID each sent message was written under, in order. */
+    val sentMessageIds = mutableListOf<String>()
+    /** When set, sendMessage waits for it, like a write the server hasn't confirmed yet (offline). */
+    var sendGate: CompletableDeferred<Unit>? = null
+    /** When set, sendMessage throws it, like a write the server rejected. */
+    var sendError: Throwable? = null
+
+    override suspend fun sendMessage(groupId: String, messageId: String, text: String, senderName: String) {
         calls += "sendMessage"
         sentMessages += senderName to text
+        sentMessageIds += messageId
+        sendGate?.await()
+        sendError?.let { throw it }
     }
 
     /** When set, updateAvailability throws it, like a write the server rejected. */

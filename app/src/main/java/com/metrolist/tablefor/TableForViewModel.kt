@@ -22,6 +22,7 @@ import java.time.LocalTime
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.UUID
 
 class TableForViewModel(
     private val repository: TableForRepository = FirebaseTableForRepository(),
@@ -69,6 +70,19 @@ class TableForViewModel(
     /** False until the group chat has loaded, so an empty chat isn't announced too early. */
     var chatLoaded by mutableStateOf(!firebaseAvailable)
         private set
+
+    /** The chat listener's latest messages. */
+    private var listenedMessages: List<ChatMessage> = emptyList()
+
+    /**
+     * Your messages sent from this phone since the app started, by ID, with the delivery
+     * their own write reported. Each shows even when the listener doesn't have it: not
+     * reported yet, sent after the listener failed, or rejected and dropped by Firestore.
+     */
+    private val sentHere = LinkedHashMap<String, ChatMessage>()
+
+    /** Messages that reached "Sent", by their write or the listener. They never go back to "Sending". */
+    private val sentIds = HashSet<String>()
 
     var memberRatings by mutableStateOf<List<MemberRating>>(emptyList())
         private set
@@ -140,7 +154,9 @@ class TableForViewModel(
             val groupId = dinnerGroup?.groupId ?: "group_101"
             // Only real messages, even when there are none. A failure keeps what's shown.
             syncStream("Chat", repository.getChatMessagesFlow(groupId)) { cloudMessages ->
-                chatMessages = cloudMessages.map(::withSenderName)
+                listenedMessages = cloudMessages.map(::withSenderName)
+                listenedMessages.filter { it.isMe && it.delivery == Delivery.Sent }.forEach { sentIds += it.id }
+                showChat()
                 chatLoaded = true
             }
 
@@ -389,7 +405,8 @@ class TableForViewModel(
         if (text.isBlank() || !canChat) return
         val currentTimestamp = SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date())
         val newMsg = ChatMessage(
-            id = System.currentTimeMillis().toString(),
+            // Chosen before sending: the message on screen and its Firestore document share it.
+            id = UUID.randomUUID().toString(),
             senderName = profile.name,
             text = text,
             timestamp = currentTimestamp,
@@ -397,12 +414,49 @@ class TableForViewModel(
             // In sample mode it never leaves the phone, so only the time shows.
             delivery = if (sampleMode) null else Delivery.Sending
         )
-        chatMessages = chatMessages + newMsg
+        if (sampleMode) {
+            chatMessages = chatMessages + newMsg
+            return
+        }
+        sentHere[newMsg.id] = newMsg
+        showChat()
 
-        if (sampleMode) return
         val groupId = dinnerGroup?.groupId ?: "group_101"
         val senderName = profile.name
-        launchWrite("Sending message") { repository.sendMessage(groupId, text, senderName) }
+        viewModelScope.launch {
+            // The write reports its own outcome, so delivery doesn't depend on the listener.
+            // A rejection marks the message "Not sent" and leaves the sync strip alone.
+            val outcome = try {
+                repository.sendMessage(groupId, newMsg.id, text, senderName)
+                Delivery.Sent
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Sending message failed", e)
+                Delivery.NotSent
+            }
+            if (outcome == Delivery.Sent) sentIds += newMsg.id
+            sentHere[newMsg.id] = newMsg.copy(delivery = outcome)
+            showChat()
+        }
+    }
+
+    /**
+     * Shows the listener's messages, then your sends it doesn't have, in the order sent.
+     * Each of yours shows the furthest delivery its write or the listener has reported.
+     */
+    private fun showChat() {
+        val listed = listenedMessages.map { if (it.isMe) it.copy(delivery = deliveryOf(it)) else it }
+        val listedIds = listed.mapTo(HashSet()) { it.id }
+        val notListed = sentHere.values.filter { it.id !in listedIds }.map { it.copy(delivery = deliveryOf(it)) }
+        chatMessages = listed + notListed
+    }
+
+    /** "Not sent" once the write is rejected; "Sent" once either source said so; otherwise as reported. */
+    private fun deliveryOf(message: ChatMessage): Delivery? = when {
+        sentHere[message.id]?.delivery == Delivery.NotSent -> Delivery.NotSent
+        message.id in sentIds -> Delivery.Sent
+        else -> message.delivery
     }
 
     /** Others' messages with a blank or missing sender name show as [UNNAMED_SENDER]. */

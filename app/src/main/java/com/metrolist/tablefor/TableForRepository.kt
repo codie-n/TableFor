@@ -12,9 +12,8 @@ import kotlinx.coroutines.flow.Flow
  * Nothing is read or written without a signed-in user: listener streams end
  * at once, and writes do nothing or throw.
  *
- * Writes return when the server confirms them and throw if it rejects them;
- * [sendMessage] only logs a failure. Offline, Firestore queues writes on the
- * phone and they wait for the connection.
+ * Writes return when the server confirms them and throw if it rejects them.
+ * Offline, Firestore queues writes on the phone and they wait for the connection.
  */
 interface TableForRepository {
     val isFirebaseAvailable: Boolean
@@ -24,7 +23,11 @@ interface TableForRepository {
 
     /** The group's messages, oldest first. Your own carry their [Delivery], reported again once the server has them. */
     fun getChatMessagesFlow(groupId: String): Flow<List<ChatMessage>>
-    suspend fun sendMessage(groupId: String, text: String, senderName: String)
+    /**
+     * Writes your message as the document [messageId], an ID chosen before sending, so the
+     * message on screen and its document share it. Throws if the write fails.
+     */
+    suspend fun sendMessage(groupId: String, messageId: String, text: String, senderName: String)
 
     /**
      * Saves one slot under [slotKey] (see [AvailabilityKeys]) and deletes [staleKeys]

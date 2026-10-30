@@ -185,26 +185,21 @@ class FirebaseTableForRepository : TableForRepository {
         awaitClose { listenerRegistration.remove() }
     }
 
-    override suspend fun sendMessage(groupId: String, text: String, senderName: String) {
-        val firestore = db ?: return
-        val uid = currentUserId ?: return
-        try {
-            val messageData = mapOf(
-                "senderId" to uid,
-                "senderName" to senderName,
-                "text" to text,
-                "timestamp" to Timestamp.now()
-            )
-            firestore.collection("groups")
-                .document(groupId)
-                .collection("messages")
-                .add(messageData)
-                .await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "Sending message failed", e)
-        }
+    override suspend fun sendMessage(groupId: String, messageId: String, text: String, senderName: String) {
+        val (firestore, uid) = requireSignedIn()
+        val messageData = mapOf(
+            "senderId" to uid,
+            "senderName" to senderName,
+            "text" to text,
+            "timestamp" to Timestamp.now()
+        )
+        // set() on the chosen ID, not add(), so the document has the ID shown on screen.
+        firestore.collection("groups")
+            .document(groupId)
+            .collection("messages")
+            .document(messageId)
+            .set(messageData)
+            .await()
     }
 
     // --- Schedule Availability ---
