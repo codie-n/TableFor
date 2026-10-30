@@ -45,9 +45,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.tooling.preview.Preview
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 // Type-safe navigation routes
 @Serializable sealed interface Screen {
@@ -995,12 +1000,34 @@ fun RatingSliderRow(label: String, score: Int, onScoreChanged: (Int) -> Unit) {
     }
 }
 
+/**
+ * A repository with no backend, for the previews. Firebase counts as unavailable,
+ * so the ViewModel runs in sample mode and never reads or writes anything.
+ */
+private object NoBackendRepository : TableForRepository {
+    override val isFirebaseAvailable = false
+    override suspend fun signIn(): String? = null
+    override fun getChatMessagesFlow(groupId: String): Flow<List<ChatMessage>> = emptyFlow()
+    override suspend fun sendMessage(groupId: String, text: String, senderName: String) {}
+    override suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, staleKeys: Set<String>) {}
+    override fun getAvailabilityFlow(userId: String): Flow<Map<String, Boolean>> = emptyFlow()
+    override suspend fun saveProfile(profile: UserProfile) {}
+    override fun getUserProfileFlow(userId: String): Flow<UserProfile?> = emptyFlow()
+    override suspend fun submitRatings(groupId: String, ratings: List<MemberRating>) {}
+}
+
+/** The previews' fixed time: noon on Friday, Oct 30, 2026, in Honolulu. */
+private val PREVIEW_CLOCK: Clock = Clock.fixed(Instant.parse("2026-10-30T22:00:00Z"), ZoneId.of("Pacific/Honolulu"))
+
+/** The ViewModel the previews show: sample data on a fixed date, without Firebase or the real time. */
+@Composable
+private fun previewViewModel(): TableForViewModel = remember { TableForViewModel(NoBackendRepository, PREVIEW_CLOCK) }
 
 @Preview(name = "Profile Screen", showBackground = true)
 @Composable
 fun ProfileScreenPreview() {
     MaterialTheme {
-        ProfileScreen(viewModel = TableForViewModel())
+        ProfileScreen(viewModel = previewViewModel())
     }
 }
 
@@ -1008,7 +1035,7 @@ fun ProfileScreenPreview() {
 @Composable
 fun ScheduleScreenPreview() {
     MaterialTheme {
-        ScheduleScreen(viewModel = TableForViewModel())
+        ScheduleScreen(viewModel = previewViewModel())
     }
 }
 
@@ -1016,7 +1043,7 @@ fun ScheduleScreenPreview() {
 @Composable
 fun MatchScreenPreview() {
     MaterialTheme {
-        MatchScreen(viewModel = TableForViewModel())
+        MatchScreen(viewModel = previewViewModel())
     }
 }
 
@@ -1024,7 +1051,7 @@ fun MatchScreenPreview() {
 @Composable
 fun ChatScreenPreview() {
     MaterialTheme {
-        ChatScreen(viewModel = TableForViewModel())
+        ChatScreen(viewModel = previewViewModel())
     }
 }
 
@@ -1032,6 +1059,6 @@ fun ChatScreenPreview() {
 @Composable
 fun RatingScreenPreview() {
     MaterialTheme {
-        RatingScreen(viewModel = TableForViewModel())
+        RatingScreen(viewModel = previewViewModel())
     }
 }
