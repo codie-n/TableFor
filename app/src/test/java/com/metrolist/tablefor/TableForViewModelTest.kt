@@ -31,7 +31,7 @@ class TableForViewModelTest {
     }
 
     @Test
-    fun `chat messages from the repository replace the sample messages`() {
+    fun `a signed-in user sees the chat messages from the repository`() {
         val vm = TableForViewModel(repo, TEST_CLOCK)
         val cloud = listOf(ChatMessage("m1", "Sam", "Hi", "6:00 PM", isMe = false))
 
