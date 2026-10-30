@@ -148,9 +148,18 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
     }
 
     // Set by the chat's Profile button: Profile then opens at the top with the name field focused.
+    // The request is for that one visit to Profile, so an unused one never carries over.
     var focusProfileName by remember { mutableStateOf(false) }
 
-    fun navigateTo(screen: Screen) {
+    // Leaving Profile, by any route, drops a request it hasn't used yet (you can leave
+    // before the name field is laid out).
+    LaunchedEffect(currentScreen) {
+        if (currentScreen != Screen.Profile) focusProfileName = false
+    }
+
+    /** [focusName]: only the chat's Profile button asks for it; any other way to a tab drops the request. */
+    fun navigateTo(screen: Screen, focusName: Boolean = false) {
+        focusProfileName = focusName
         navController.navigate(screen) {
             popUpTo(navController.graph.findStartDestination().id) {
                 saveState = true
@@ -207,8 +216,7 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
             }
             composable<Screen.Chat> {
                 ChatScreen(viewModel = viewModel, onOpenProfile = {
-                    focusProfileName = true
-                    navigateTo(Screen.Profile)
+                    navigateTo(Screen.Profile, focusName = true)
                 })
             }
             composable<Screen.Rate> {
