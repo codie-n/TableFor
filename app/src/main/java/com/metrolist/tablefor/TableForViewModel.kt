@@ -25,7 +25,7 @@ import java.util.Locale
 
 class TableForViewModel(
     private val repository: TableForRepository = FirebaseTableForRepository(),
-    private val clock: Clock = Clock.systemDefaultZone()
+    private val clock: Clock = PhoneClock
 ) : ViewModel() {
 
     private val firebaseAvailable = repository.isFirebaseAvailable
@@ -197,19 +197,33 @@ class TableForViewModel(
     /** The app came to the foreground: catch up if the date changed, then watch for midnight. */
     fun onAppForeground() {
         refreshWeekIfDateChanged()
-        if (midnightTimer?.isActive == true) return
-        midnightTimer = viewModelScope.launch {
-            while (true) {
-                delay(millisUntilTomorrow())
-                refreshWeekIfDateChanged()
-            }
-        }
+        startMidnightTimer()
     }
 
     /** The app went to the background: stop the midnight timer; [onAppForeground] catches up. */
     fun onAppBackground() {
         midnightTimer?.cancel()
         midnightTimer = null
+    }
+
+    /**
+     * The phone's time or time zone was changed while the app is open: catch up
+     * if the date changed, and restart the midnight timer for the new midnight.
+     */
+    fun onTimeChanged() {
+        refreshWeekIfDateChanged()
+        if (midnightTimer != null) startMidnightTimer()
+    }
+
+    /** (Re)starts the timer that rebuilds the week at local midnight. */
+    private fun startMidnightTimer() {
+        midnightTimer?.cancel()
+        midnightTimer = viewModelScope.launch {
+            while (true) {
+                delay(millisUntilTomorrow())
+                refreshWeekIfDateChanged()
+            }
+        }
     }
 
     private fun millisUntilTomorrow(): Long {
