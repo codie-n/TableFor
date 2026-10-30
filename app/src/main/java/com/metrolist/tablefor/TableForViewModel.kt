@@ -53,8 +53,14 @@ class TableForViewModel(
     var availabilityGrid by mutableStateOf<List<AvailabilityCell>>(emptyList())
         private set
 
-    var dinnerGroup by mutableStateOf<DinnerGroup?>(DinnerGroup())
-        private set
+    /** The group as loaded. Your own entry in it is only a placeholder; [dinnerGroup] fills it in. */
+    private var group by mutableStateOf<DinnerGroup?>(DinnerGroup())
+
+    /** The group, with your entry always built from your current profile (see [yourEntry]). */
+    val dinnerGroup: DinnerGroup?
+        get() = group?.let { g ->
+            g.copy(members = g.members.map { member -> if (member.id == myUserId) yourEntry(member) else member })
+        }
 
     /** Sample messages in sample mode; otherwise only real ones, empty until the chat loads. */
     var chatMessages by mutableStateOf<List<ChatMessage>>(if (firebaseAvailable) emptyList() else SAMPLE_MESSAGES)
@@ -126,7 +132,7 @@ class TableForViewModel(
             // Each stream handles its own errors, so one failing never stops the others.
             syncStream("Profile", repository.getUserProfileFlow(userId)) { cloudProfile ->
                 // No profile document yet: start blank, not with the sample profile.
-                applyProfile(cloudProfile ?: UserProfile.blank(userId))
+                profile = cloudProfile ?: UserProfile.blank(userId)
                 profileLoaded = true
             }
 
@@ -230,8 +236,8 @@ class TableForViewModel(
 
     /** Gives your entry in the (still mock) group the signed-in user's ID. */
     private fun useSignedInUser(userId: String) {
-        dinnerGroup = dinnerGroup?.let { group ->
-            group.copy(members = group.members.map { member ->
+        group = group?.let { g ->
+            g.copy(members = g.members.map { member ->
                 if (member.id == myUserId) member.copy(id = userId) else member
             })
         }
@@ -239,9 +245,28 @@ class TableForViewModel(
         refreshRatingList()
     }
 
+    /**
+     * Your group entry, from your current profile. While a signed-in user's
+     * profile loads (or if it can't load), it's "You" with no score or badge;
+     * after that, your name and your score, or the "New" badge with no ratings.
+     */
+    private fun yourEntry(placeholder: GroupMember): GroupMember =
+        if (!profileLoaded) {
+            placeholder.copy(name = "You", rating = null, diet = profileDiet(), isLoading = true)
+        } else {
+            placeholder.copy(
+                name = profile.name.ifBlank { "You" },
+                rating = profile.trustRating.takeIf { profile.totalRatings > 0 },
+                diet = profileDiet(),
+                isLoading = false
+            )
+        }
+
+    private fun profileDiet() = profile.diets.joinToString(", ").ifEmpty { "None" }
+
     /** Everyone in the group except you, keeping any scores already set. */
     private fun refreshRatingList() {
-        val group = dinnerGroup ?: return
+        val group = group ?: return
         val existing = memberRatings.associateBy { it.memberId }
         memberRatings = group.members.filter { it.id != myUserId }.map { member ->
             existing[member.id] ?: MemberRating(memberId = member.id, memberName = member.name)
@@ -306,7 +331,7 @@ class TableForViewModel(
     /** Save button: writes the whole profile and reports the result in [profileSaveState]. */
     fun saveProfile(newProfile: UserProfile) {
         if (!profileLoaded || profileSaveState == SaveState.Saving) return
-        applyProfile(newProfile)
+        profile = newProfile
         if (sampleMode) {
             profileSaveState = SaveState.Saved
             return
@@ -326,28 +351,9 @@ class TableForViewModel(
     /** Diet, cuisine and budget taps: saved right away, without the Save button's message. */
     fun updateProfile(newProfile: UserProfile) {
         if (!profileLoaded) return
-        applyProfile(newProfile)
+        profile = newProfile
         if (sampleMode) return
         launchWrite("Saving preferences") { repository.saveProfile(newProfile) }
-    }
-
-    /** Shows [newProfile] locally, including your entry in the group. */
-    private fun applyProfile(newProfile: UserProfile) {
-        profile = newProfile
-        dinnerGroup = dinnerGroup?.let { group ->
-            val updatedMembers = group.members.map { member ->
-                if (member.id == myUserId) {
-                    member.copy(
-                        name = newProfile.name.ifBlank { "You" },
-                        rating = newProfile.trustRating.takeIf { newProfile.totalRatings > 0 },
-                        diet = newProfile.diets.joinToString(", ").ifEmpty { "None" }
-                    )
-                } else {
-                    member
-                }
-            }
-            group.copy(members = updatedMembers)
-        }
     }
 
     fun toggleAvailability(dayIndex: Int, timeSlot: String) {

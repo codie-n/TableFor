@@ -61,6 +61,7 @@ data class DinnerGroup(
     val address: String = "1450 Ala Moana Blvd #2054, Honolulu, HI 96814",
     val timeString: String = "Friday, 7:00 PM",
     val members: List<GroupMember> = listOf(
+        // Your entry: a placeholder. The app shows one built from your profile instead.
         GroupMember(LOCAL_USER_ID, "Steve Brown", "You", 4.8f, "None"),
         GroupMember("2", "Sarah Jenkins", "Student @ UHM", 4.9f, "None"),
         GroupMember("3", "Marcus Vance", "Software Engineer", 4.7f, "Vegan"),
@@ -75,7 +76,9 @@ data class GroupMember(
     val role: String,
     /** Average score, or null when nobody has rated them yet. */
     val rating: Float?,
-    val diet: String
+    val diet: String,
+    /** Your own entry while your profile is still loading: shown as "You", with no score or badge. */
+    val isLoading: Boolean = false
 )
 
 @Serializable

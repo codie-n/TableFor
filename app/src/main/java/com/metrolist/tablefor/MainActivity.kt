@@ -656,7 +656,8 @@ fun MatchScreen(viewModel: TableForViewModel) {
                                 Text("${member.role} • Diet: ${member.diet}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                             }
                         }
-                        Surface(
+                        // Your entry has no badge until your profile has loaded.
+                        if (!member.isLoading) Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = Color(0xFFFFB300).copy(alpha = 0.15f)
                         ) {
