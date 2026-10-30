@@ -66,8 +66,16 @@ class FirebaseTableForRepository : TableForRepository {
         }
     }
 
-    override val currentUserId: String
-        get() = auth?.currentUser?.uid ?: "user_1"
+    /** The signed-in user, or null. Without one, nothing is read from or written to Firestore. */
+    private val currentUserId: String?
+        get() = auth?.currentUser?.uid
+
+    /** Firestore and the user ID for a write; throws when Firebase is missing or nobody is signed in. */
+    private fun requireSignedIn(): Pair<FirebaseFirestore, String> {
+        val firestore = db ?: throw IllegalStateException("Firebase is not available")
+        val uid = currentUserId ?: throw IllegalStateException("Not signed in")
+        return firestore to uid
+    }
 
     override val isFirebaseAvailable: Boolean
         get() = db != null && auth != null
@@ -92,7 +100,7 @@ class FirebaseTableForRepository : TableForRepository {
     // --- Realtime Chat ---
     override fun getChatMessagesFlow(groupId: String): Flow<List<ChatMessage>> = callbackFlow {
         val firestore = db
-        if (firestore == null) {
+        if (firestore == null || currentUserId == null) {
             close()
             return@callbackFlow
         }
@@ -139,9 +147,10 @@ class FirebaseTableForRepository : TableForRepository {
 
     override suspend fun sendMessage(groupId: String, text: String, senderName: String) {
         val firestore = db ?: return
+        val uid = currentUserId ?: return
         try {
             val messageData = mapOf(
-                "senderId" to currentUserId,
+                "senderId" to uid,
                 "senderName" to senderName,
                 "text" to text,
                 "timestamp" to Timestamp.now()
@@ -159,8 +168,9 @@ class FirebaseTableForRepository : TableForRepository {
     // --- Schedule Availability ---
     override suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, today: LocalDate) {
         val firestore = db ?: return
+        val uid = currentUserId ?: return
         try {
-            val userAvailRef = firestore.collection("availability").document(currentUserId)
+            val userAvailRef = firestore.collection("availability").document(uid)
 
             firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(userAvailRef)
@@ -176,7 +186,7 @@ class FirebaseTableForRepository : TableForRepository {
 
     override fun getAvailabilityFlow(userId: String): Flow<Map<String, Boolean>> = callbackFlow {
         val firestore = db
-        if (firestore == null) {
+        if (firestore == null || currentUserId == null) {
             close()
             return@callbackFlow
         }
@@ -201,17 +211,17 @@ class FirebaseTableForRepository : TableForRepository {
 
     // --- User Profile ---
     override suspend fun saveProfile(profile: UserProfile) {
-        val firestore = db ?: return
+        val (firestore, uid) = requireSignedIn()
         // merge() keeps fields this save doesn't write, such as server-computed ratings.
         firestore.collection("users")
-            .document(currentUserId)
-            .set(profileToFirestore(currentUserId, profile), SetOptions.merge())
+            .document(uid)
+            .set(profileToFirestore(uid, profile), SetOptions.merge())
             .await()
     }
 
     override fun getUserProfileFlow(userId: String): Flow<UserProfile?> = callbackFlow {
         val firestore = db
-        if (firestore == null) {
+        if (firestore == null || currentUserId == null) {
             close()
             return@callbackFlow
         }
@@ -239,8 +249,7 @@ class FirebaseTableForRepository : TableForRepository {
 
     // --- Member Ratings ---
     override suspend fun submitRatings(groupId: String, ratings: List<MemberRating>) {
-        val firestore = db ?: return
-        val raterId = currentUserId
+        val (firestore, raterId) = requireSignedIn()
         val batch = firestore.batch()
         for (rating in ratings) {
             val ratingData = mapOf(

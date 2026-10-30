@@ -9,9 +9,11 @@ import java.time.LocalDate
  *
  * The `get...Flow` listener streams fail (throw) when the backend reports an
  * error, such as denied access; they never crash the app themselves.
+ *
+ * Nothing is read or written without a signed-in user: listener streams end
+ * at once, and writes do nothing or throw.
  */
 interface TableForRepository {
-    val currentUserId: String
     val isFirebaseAvailable: Boolean
 
     /** Signs in if needed. Returns the user ID, or null if Firebase is unavailable or sign-in failed. */
@@ -26,12 +28,12 @@ interface TableForRepository {
      */
     suspend fun updateAvailability(slotKey: String, isAvailable: Boolean, today: LocalDate)
     /** Saved slots, keyed by [AvailabilityKeys]. */
-    fun getAvailabilityFlow(userId: String = currentUserId): Flow<Map<String, Boolean>>
+    fun getAvailabilityFlow(userId: String): Flow<Map<String, Boolean>>
 
     /** Saves the editable profile fields, never trustRating or totalRatings. Throws if the write fails. */
     suspend fun saveProfile(profile: UserProfile)
     /** The saved profile, or null when the user has no profile document yet. */
-    fun getUserProfileFlow(userId: String = currentUserId): Flow<UserProfile?>
+    fun getUserProfileFlow(userId: String): Flow<UserProfile?>
 
     /** Writes all ratings in one batch, overwriting earlier ones. Throws if the write fails. */
     suspend fun submitRatings(groupId: String, ratings: List<MemberRating>)

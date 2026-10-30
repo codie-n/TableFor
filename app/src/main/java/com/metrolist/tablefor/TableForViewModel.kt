@@ -25,7 +25,7 @@ class TableForViewModel(
     private val firebaseAvailable = repository.isFirebaseAvailable
 
     /** Sample data in sample mode; otherwise blank until the saved profile loads. */
-    var profile by mutableStateOf(if (firebaseAvailable) UserProfile.blank("") else UserProfile())
+    var profile by mutableStateOf(if (firebaseAvailable) UserProfile.blank(LOCAL_USER_ID) else UserProfile())
         private set
 
     /** False until the saved profile (or the sample one) is in [profile]. Saving waits for it. */
@@ -62,9 +62,16 @@ class TableForViewModel(
     )
         private set
 
+    /** Your ID: the Firebase user ID once signed in, [LOCAL_USER_ID] before that and in sample mode. */
+    private var myUserId = LOCAL_USER_ID
+
+    /** No Firebase or no signed-in user: everything stays on the device and nothing is read or written. */
+    private val sampleMode: Boolean
+        get() = syncStatus == SyncStatus.SampleData
+
     init {
         generateUpcomingWeekGrid()
-        initRatings()
+        refreshRatingList()
         initializeFirestoreSync()
     }
 
@@ -85,12 +92,13 @@ class TableForViewModel(
                 profileLoaded = true
                 return@launch
             }
+            useSignedInUser(userId)
             syncStatus = SyncStatus.Synced
 
             // Each stream handles its own errors, so one failing never stops the others.
-            syncStream("Profile", repository.getUserProfileFlow()) { cloudProfile ->
+            syncStream("Profile", repository.getUserProfileFlow(userId)) { cloudProfile ->
                 // No profile document yet: start blank, not with the sample profile.
-                profile = cloudProfile ?: UserProfile.blank(userId)
+                applyProfile(cloudProfile ?: UserProfile.blank(userId))
                 profileLoaded = true
             }
 
@@ -103,7 +111,7 @@ class TableForViewModel(
 
             // The grid shows exactly what's saved: old-format keys and past
             // dates match no cell, so they're ignored.
-            syncStream("Availability", repository.getAvailabilityFlow()) { cloudSlots ->
+            syncStream("Availability", repository.getAvailabilityFlow(userId)) { cloudSlots ->
                 availabilityGrid = availabilityGrid.map { cell ->
                     cell.copy(isAvailable = cloudSlots[cell.slotKey] == true)
                 }
@@ -144,10 +152,35 @@ class TableForViewModel(
         availabilityGrid = cells
     }
 
-    private fun initRatings() {
-        dinnerGroup?.let { group ->
-            memberRatings = group.members.filter { it.id != "1" }.map { member ->
-                MemberRating(memberId = member.id, memberName = member.name)
+    /** Gives your entry in the (still mock) group the signed-in user's ID. */
+    private fun useSignedInUser(userId: String) {
+        dinnerGroup = dinnerGroup?.let { group ->
+            group.copy(members = group.members.map { member ->
+                if (member.id == myUserId) member.copy(id = userId) else member
+            })
+        }
+        myUserId = userId
+        refreshRatingList()
+    }
+
+    /** Everyone in the group except you, keeping any scores already set. */
+    private fun refreshRatingList() {
+        val group = dinnerGroup ?: return
+        val existing = memberRatings.associateBy { it.memberId }
+        memberRatings = group.members.filter { it.id != myUserId }.map { member ->
+            existing[member.id] ?: MemberRating(memberId = member.id, memberName = member.name)
+        }
+    }
+
+    /** Runs a background write. Failures are logged; they never crash the app. */
+    private fun launchWrite(what: String, write: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                write()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "$what failed", e)
             }
         }
     }
@@ -156,6 +189,10 @@ class TableForViewModel(
     fun saveProfile(newProfile: UserProfile) {
         if (!profileLoaded || profileSaveState == SaveState.Saving) return
         applyProfile(newProfile)
+        if (sampleMode) {
+            profileSaveState = SaveState.Saved
+            return
+        }
         profileSaveState = SaveState.Saving
         viewModelScope.launch {
             profileSaveState = try {
@@ -174,15 +211,8 @@ class TableForViewModel(
     fun updateProfile(newProfile: UserProfile) {
         if (!profileLoaded) return
         applyProfile(newProfile)
-        viewModelScope.launch {
-            try {
-                repository.saveProfile(newProfile)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Saving preferences failed", e)
-            }
-        }
+        if (sampleMode) return
+        launchWrite("Saving preferences") { repository.saveProfile(newProfile) }
     }
 
     /** Shows [newProfile] locally, including your entry in the group. */
@@ -190,9 +220,9 @@ class TableForViewModel(
         profile = newProfile
         dinnerGroup = dinnerGroup?.let { group ->
             val updatedMembers = group.members.map { member ->
-                if (member.id == "1") {
+                if (member.id == myUserId) {
                     member.copy(
-                        name = newProfile.name,
+                        name = newProfile.name.ifBlank { "You" },
                         rating = newProfile.trustRating,
                         diet = newProfile.diets.joinToString(", ").ifEmpty { "None" }
                     )
@@ -210,7 +240,8 @@ class TableForViewModel(
         availabilityGrid = availabilityGrid.map { cell ->
             if (cell == target) cell.copy(isAvailable = newStatus) else cell
         }
-        viewModelScope.launch {
+        if (sampleMode) return
+        launchWrite("Saving availability") {
             repository.updateAvailability(target.slotKey, newStatus, LocalDate.now(clock))
         }
     }
@@ -228,10 +259,10 @@ class TableForViewModel(
         )
         chatMessages = chatMessages + newMsg
 
-        viewModelScope.launch {
-            val groupId = dinnerGroup?.groupId ?: "group_101"
-            repository.sendMessage(groupId, text, profile.name)
-        }
+        if (sampleMode) return
+        val groupId = dinnerGroup?.groupId ?: "group_101"
+        val senderName = profile.name
+        launchWrite("Sending message") { repository.sendMessage(groupId, text, senderName) }
     }
 
     /** Slider moves change local state only; nothing is written until [submitRatings]. */
@@ -250,6 +281,10 @@ class TableForViewModel(
     /** Writes all ratings in one batch. Ignored while a submit is already in progress. */
     fun submitRatings() {
         if (ratingsSubmitState == SaveState.Saving) return
+        if (sampleMode) {
+            ratingsSubmitState = SaveState.Saved
+            return
+        }
         ratingsSubmitState = SaveState.Saving
         val submitted = memberRatings
         val groupId = dinnerGroup?.groupId ?: "group_101"

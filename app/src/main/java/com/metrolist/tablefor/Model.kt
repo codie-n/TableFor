@@ -5,9 +5,15 @@ import kotlinx.serialization.Serializable
 import java.time.LocalDate
 import java.time.LocalTime
 
+/**
+ * Your ID before sign-in and in sample mode. Local only: it's never written to
+ * Firestore. After sign-in, your group entry takes the Firebase user ID.
+ */
+const val LOCAL_USER_ID = "local_user"
+
 @Serializable
 data class UserProfile(
-    val id: String = "user_1",
+    val id: String = LOCAL_USER_ID,
     val name: String = "Alex Chen",
     val bio: String = "New in town, love exploring food spots!",
     val location: String = "Downtown / Financial District",
@@ -55,7 +61,7 @@ data class DinnerGroup(
     val address: String = "142 5th Ave, New York, NY 10011",
     val timeString: String = "Thursday, 7:00 PM",
     val members: List<GroupMember> = listOf(
-        GroupMember("1", "Alex Chen", "You", 4.8f, "Vegetarian"),
+        GroupMember(LOCAL_USER_ID, "Alex Chen", "You", 4.8f, "Vegetarian"),
         GroupMember("2", "Sarah Jenkins", "Student @ NYU", 4.9f, "None"),
         GroupMember("3", "Marcus Vance", "Software Engineer", 4.7f, "Vegan"),
         GroupMember("4", "Elena Rostova", "Designer", 5.0f, "Gluten-Free")

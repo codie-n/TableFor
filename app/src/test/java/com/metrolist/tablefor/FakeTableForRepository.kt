@@ -23,7 +23,6 @@ class FakeStream<T> {
 /** In-memory repository that records every call the ViewModel makes. */
 class FakeTableForRepository(
     override val isFirebaseAvailable: Boolean = true,
-    override val currentUserId: String = "uid_test",
 ) : TableForRepository {
 
     val profileStream = FakeStream<UserProfile?>()
@@ -44,7 +43,7 @@ class FakeTableForRepository(
     var submitError: Throwable? = null
 
     /** What signIn returns: the user ID, or null for a failed sign-in. */
-    var signInResult: String? = currentUserId
+    var signInResult: String? = "uid_test"
     /** When set, signIn throws it. */
     var signInError: Throwable? = null
 
