@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -58,6 +59,16 @@ import java.time.LocalDate
 }
 
 data class NavigationItem(val title: String, val screen: Screen, val icon: ImageVector)
+
+/** The top bar title for each screen. */
+private val Screen.topBarTitle: String
+    get() = when (this) {
+        is Screen.Profile -> "Profile & Preferences"
+        is Screen.Schedule -> "Upcoming Week Schedule"
+        is Screen.Match -> "Matched Dinner Group"
+        is Screen.Chat -> "Group Chat"
+        is Screen.Rate -> "Post-Dinner Ratings"
+    }
 
 /** Shown when the server hasn't confirmed a save yet; Firestore sends it when the connection returns. */
 private const val SAVED_ON_PHONE_MESSAGE = "Saved on this phone — will sync when you're back online"
@@ -124,19 +135,17 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
         NavigationItem("Rate", Screen.Rate, Icons.Default.Star)
     )
 
-    var currentRouteTitle by remember { mutableStateOf("Profile & Preferences") }
+    // The screen showing, read from the navigation state. The title and the selected tab
+    // come from it, so they follow the bottom bar, Back and the chat's Profile button alike.
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentScreen = currentBackStackEntry?.destination?.let { destination ->
+        items.firstOrNull { destination.hasRoute(it.screen::class) }?.screen
+    }
 
     // Set by the chat's Profile button: Profile then opens at the top with the name field focused.
     var focusProfileName by remember { mutableStateOf(false) }
 
     fun navigateTo(screen: Screen) {
-        currentRouteTitle = when (screen) {
-            is Screen.Profile -> "Profile & Preferences"
-            is Screen.Schedule -> "Upcoming Week Schedule"
-            is Screen.Match -> "Matched Dinner Group"
-            is Screen.Chat -> "Group Chat"
-            is Screen.Rate -> "Post-Dinner Ratings"
-        }
         navController.navigate(screen) {
             popUpTo(navController.graph.findStartDestination().id) {
                 saveState = true
@@ -150,7 +159,8 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text(currentRouteTitle, fontWeight = FontWeight.Bold) },
+                    // Before the first destination is set, the start screen's title.
+                    title = { Text((currentScreen ?: Screen.Profile).topBarTitle, fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -161,15 +171,11 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
         },
         bottomBar = {
             NavigationBar {
-                val currentBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentDestination = currentBackStackEntry?.destination?.route
-
                 items.forEach { item ->
-                    val selected = currentDestination?.contains(item.screen::class.simpleName ?: "") == true
                     NavigationBarItem(
                         icon = { Icon(item.icon, contentDescription = item.title) },
                         label = { Text(item.title) },
-                        selected = selected,
+                        selected = item.screen == currentScreen,
                         onClick = { navigateTo(item.screen) }
                     )
                 }
