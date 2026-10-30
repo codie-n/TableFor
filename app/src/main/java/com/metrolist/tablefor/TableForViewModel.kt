@@ -56,13 +56,12 @@ class TableForViewModel(
     var dinnerGroup by mutableStateOf<DinnerGroup?>(DinnerGroup())
         private set
 
-    var chatMessages by mutableStateOf<List<ChatMessage>>(
-        listOf(
-            ChatMessage("1", "Sarah Jenkins", "Hey everyone! Excited for dinner on Thursday at Trattoria Bella!", "6:45 PM", false),
-            ChatMessage("2", "Marcus Vance", "Me too! Are we all good with walking there together?", "6:50 PM", false),
-            ChatMessage("3", "Alex Chen", "Sounds great! See you all there.", "6:52 PM", true)
-        )
-    )
+    /** Sample messages in sample mode; otherwise only real ones, empty until the chat loads. */
+    var chatMessages by mutableStateOf<List<ChatMessage>>(if (firebaseAvailable) emptyList() else SAMPLE_MESSAGES)
+        private set
+
+    /** False until the group chat has loaded, so an empty chat isn't announced too early. */
+    var chatLoaded by mutableStateOf(!firebaseAvailable)
         private set
 
     var memberRatings by mutableStateOf<List<MemberRating>>(emptyList())
@@ -117,6 +116,8 @@ class TableForViewModel(
                 syncStatus = SyncStatus.SampleData
                 profile = UserProfile()
                 profileLoaded = true
+                chatMessages = SAMPLE_MESSAGES
+                chatLoaded = true
                 return@launch
             }
             useSignedInUser(userId)
@@ -130,10 +131,10 @@ class TableForViewModel(
             }
 
             val groupId = dinnerGroup?.groupId ?: "group_101"
+            // Only real messages, even when there are none. A failure keeps what's shown.
             syncStream("Chat", repository.getChatMessagesFlow(groupId)) { cloudMessages ->
-                if (cloudMessages.isNotEmpty()) {
-                    chatMessages = cloudMessages.map(::withSenderName)
-                }
+                chatMessages = cloudMessages.map(::withSenderName)
+                chatLoaded = true
             }
 
             // The grid shows exactly what's saved: old-format keys and past
@@ -439,6 +440,13 @@ class TableForViewModel(
 
         /** Shown for a chat sender with no name. */
         const val UNNAMED_SENDER = "Group member"
+
+        /** The chat in sample mode. */
+        val SAMPLE_MESSAGES = listOf(
+            ChatMessage("1", "Sarah Jenkins", "Hey everyone! Excited for dinner on Thursday at Trattoria Bella!", "6:45 PM", false),
+            ChatMessage("2", "Marcus Vance", "Me too! Are we all good with walking there together?", "6:50 PM", false),
+            ChatMessage("3", "Alex Chen", "Sounds great! See you all there.", "6:52 PM", true)
+        )
 
         /** Dinner slots: start time and the label shown on the Schedule screen. */
         val TIME_SLOTS = listOf(

@@ -708,6 +708,18 @@ fun ChatScreen(viewModel: TableForViewModel, onOpenProfile: () -> Unit = {}) {
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (viewModel.chatLoaded && messages.isEmpty()) {
+                    item {
+                        Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                "No messages yet — say hi to your table.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
                 items(messages) { msg ->
                     Column(
                         modifier = Modifier.fillMaxWidth(),
