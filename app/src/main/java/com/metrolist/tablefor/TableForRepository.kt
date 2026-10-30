@@ -6,12 +6,16 @@ import java.time.LocalDate
 /**
  * Backend access for the ViewModel. [FirebaseTableForRepository] is the real
  * implementation; tests use a fake.
+ *
+ * The `get...Flow` listener streams fail (throw) when the backend reports an
+ * error, such as denied access; they never crash the app themselves.
  */
 interface TableForRepository {
     val currentUserId: String
     val isFirebaseAvailable: Boolean
 
-    suspend fun signInAnonymously()
+    /** Signs in if needed. Returns the user ID, or null if Firebase is unavailable or sign-in failed. */
+    suspend fun signIn(): String?
 
     fun getChatMessagesFlow(groupId: String): Flow<List<ChatMessage>>
     suspend fun sendMessage(groupId: String, text: String, senderName: String)

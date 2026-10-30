@@ -1,9 +1,11 @@
 package com.metrolist.tablefor
 
+import android.util.Log
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -43,14 +45,19 @@ class FirebaseTableForRepository : TableForRepository {
         get() = db != null && auth != null
 
     // --- Authentication ---
-    override suspend fun signInAnonymously() {
-        try {
-            val a = auth ?: return
+    override suspend fun signIn(): String? {
+        val a = auth ?: return null
+        if (db == null) return null
+        return try {
             if (a.currentUser == null) {
                 a.signInAnonymously().await()
             }
+            a.currentUser?.uid
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "Anonymous sign-in failed", e)
+            null
         }
     }
 
@@ -68,29 +75,35 @@ class FirebaseTableForRepository : TableForRepository {
             .orderBy("timestamp", Query.Direction.ASCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
+                    Log.w(TAG, "Chat listener failed", error)
                     close(error)
                     return@addSnapshotListener
                 }
 
-                val messages = snapshot?.documents?.mapNotNull { doc ->
-                    val senderId = doc.getString("senderId") ?: ""
-                    val senderName = doc.getString("senderName") ?: "Unknown"
-                    val text = doc.getString("text") ?: ""
-                    val timeDate = doc.getTimestamp("timestamp")?.toDate()
-                    val formattedTime: String = if (timeDate != null) {
-                        SimpleDateFormat("h:mm a", Locale.getDefault()).format(timeDate)
-                    } else ""
+                // Parsing errors (a field of the wrong type) end the stream instead of crashing.
+                try {
+                    val messages = snapshot?.documents?.mapNotNull { doc ->
+                        val senderId = doc.getString("senderId") ?: ""
+                        val senderName = doc.getString("senderName") ?: "Unknown"
+                        val text = doc.getString("text") ?: ""
+                        val timeDate = doc.getTimestamp("timestamp")?.toDate()
+                        val formattedTime: String = if (timeDate != null) {
+                            SimpleDateFormat("h:mm a", Locale.getDefault()).format(timeDate)
+                        } else ""
 
-                    ChatMessage(
-                        id = doc.id,
-                        senderName = senderName,
-                        text = text,
-                        timestamp = formattedTime,
-                        isMe = senderId == currentUserId
-                    )
-                } ?: emptyList()
+                        ChatMessage(
+                            id = doc.id,
+                            senderName = senderName,
+                            text = text,
+                            timestamp = formattedTime,
+                            isMe = senderId == currentUserId
+                        )
+                    } ?: emptyList()
 
-                trySend(messages)
+                    trySend(messages)
+                } catch (e: Exception) {
+                    close(e)
+                }
             }
 
         awaitClose { listenerRegistration.remove() }
@@ -141,10 +154,19 @@ class FirebaseTableForRepository : TableForRepository {
         }
 
         val listener = firestore.collection("availability").document(userId)
-            .addSnapshotListener { snapshot, _ ->
-                @Suppress("UNCHECKED_CAST")
-                val slots = snapshot?.get("slots") as? Map<String, Boolean> ?: emptyMap()
-                trySend(slots)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w(TAG, "Availability listener failed", error)
+                    close(error)
+                    return@addSnapshotListener
+                }
+                try {
+                    @Suppress("UNCHECKED_CAST")
+                    val slots = snapshot?.get("slots") as? Map<String, Boolean> ?: emptyMap()
+                    trySend(slots)
+                } catch (e: Exception) {
+                    close(e)
+                }
             }
         awaitClose { listener.remove() }
     }
@@ -181,23 +203,33 @@ class FirebaseTableForRepository : TableForRepository {
         }
 
         val listener = firestore.collection("users").document(userId)
-            .addSnapshotListener { snapshot, _ ->
-                if (snapshot != null && snapshot.exists()) {
-                    @Suppress("UNCHECKED_CAST")
-                    val profile = UserProfile(
-                        id = userId,
-                        name = snapshot.getString("name") ?: "Alex Chen",
-                        bio = snapshot.getString("bio") ?: "",
-                        location = snapshot.getString("location") ?: "",
-                        diets = (snapshot.get("diets") as? List<String>) ?: emptyList(),
-                        cuisinePreferences = (snapshot.get("cuisinePreferences") as? List<String>) ?: emptyList(),
-                        budget = snapshot.getString("budget") ?: "$$ (Moderate)",
-                        trustRating = snapshot.getDouble("trustRating")?.toFloat() ?: 4.8f,
-                        totalRatings = snapshot.getLong("totalRatings")?.toInt() ?: 12
-                    )
-                    trySend(profile)
-                } else {
-                    trySend(null)
+            .addSnapshotListener { snapshot, error ->
+                // An error must end the stream, not look like "no profile yet".
+                if (error != null) {
+                    Log.w(TAG, "Profile listener failed", error)
+                    close(error)
+                    return@addSnapshotListener
+                }
+                try {
+                    if (snapshot != null && snapshot.exists()) {
+                        @Suppress("UNCHECKED_CAST")
+                        val profile = UserProfile(
+                            id = userId,
+                            name = snapshot.getString("name") ?: "Alex Chen",
+                            bio = snapshot.getString("bio") ?: "",
+                            location = snapshot.getString("location") ?: "",
+                            diets = (snapshot.get("diets") as? List<String>) ?: emptyList(),
+                            cuisinePreferences = (snapshot.get("cuisinePreferences") as? List<String>) ?: emptyList(),
+                            budget = snapshot.getString("budget") ?: "$$ (Moderate)",
+                            trustRating = snapshot.getDouble("trustRating")?.toFloat() ?: 4.8f,
+                            totalRatings = snapshot.getLong("totalRatings")?.toInt() ?: 12
+                        )
+                        trySend(profile)
+                    } else {
+                        trySend(null)
+                    }
+                } catch (e: Exception) {
+                    close(e)
                 }
             }
         awaitClose { listener.remove() }
@@ -224,5 +256,9 @@ class FirebaseTableForRepository : TableForRepository {
             batch.set(ref, ratingData)
         }
         batch.commit().await()
+    }
+
+    private companion object {
+        const val TAG = "TableForRepository"
     }
 }

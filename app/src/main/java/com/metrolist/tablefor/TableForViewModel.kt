@@ -7,6 +7,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.time.Clock
@@ -44,6 +46,11 @@ class TableForViewModel(
     var ratingsSubmitState by mutableStateOf(SaveState.Idle)
         private set
 
+    var syncStatus by mutableStateOf(
+        if (repository.isFirebaseAvailable) SyncStatus.Connecting else SyncStatus.SampleData
+    )
+        private set
+
     init {
         generateUpcomingWeekGrid()
         initRatings()
@@ -51,36 +58,59 @@ class TableForViewModel(
     }
 
     private fun initializeFirestoreSync() {
+        if (!repository.isFirebaseAvailable) return // sample mode; syncStatus already says so
         viewModelScope.launch {
-            repository.signInAnonymously()
+            val userId = try {
+                repository.signIn()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Sign-in failed; using sample data", e)
+                null
+            }
+            if (userId == null) {
+                syncStatus = SyncStatus.SampleData
+                return@launch
+            }
+            syncStatus = SyncStatus.Synced
 
-            // Observe User Profile
-            launch {
-                repository.getUserProfileFlow().collect { cloudProfile ->
-                    if (cloudProfile != null) {
-                        profile = cloudProfile
-                    }
+            // Each stream handles its own errors, so one failing never stops the others.
+            syncStream("Profile", repository.getUserProfileFlow()) { cloudProfile ->
+                if (cloudProfile != null) {
+                    profile = cloudProfile
                 }
             }
 
-            // Observe Realtime Group Chat Messages
-            launch {
-                val groupId = dinnerGroup?.groupId ?: "group_101"
-                repository.getChatMessagesFlow(groupId).collect { cloudMessages ->
-                    if (cloudMessages.isNotEmpty()) {
-                        chatMessages = cloudMessages
-                    }
+            val groupId = dinnerGroup?.groupId ?: "group_101"
+            syncStream("Chat", repository.getChatMessagesFlow(groupId)) { cloudMessages ->
+                if (cloudMessages.isNotEmpty()) {
+                    chatMessages = cloudMessages
                 }
             }
 
-            // Observe Schedule Availability. The grid shows exactly what's saved:
-            // old-format keys and past dates match no cell, so they're ignored.
-            launch {
-                repository.getAvailabilityFlow().collect { cloudSlots ->
-                    availabilityGrid = availabilityGrid.map { cell ->
-                        cell.copy(isAvailable = cloudSlots[cell.slotKey] == true)
-                    }
+            // The grid shows exactly what's saved: old-format keys and past
+            // dates match no cell, so they're ignored.
+            syncStream("Availability", repository.getAvailabilityFlow()) { cloudSlots ->
+                availabilityGrid = availabilityGrid.map { cell ->
+                    cell.copy(isAvailable = cloudSlots[cell.slotKey] == true)
                 }
+            }
+        }
+    }
+
+    /**
+     * Collects one listener stream. If it fails, log it, keep the data already
+     * shown and report [SyncStatus.SyncError]; the other streams keep running.
+     */
+    private fun <T> CoroutineScope.syncStream(name: String, stream: Flow<T>, onUpdate: (T) -> Unit) {
+        launch {
+            try {
+                stream.collect { onUpdate(it) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "$name sync failed; keeping current data", e)
+                syncStatus = SyncStatus.SyncError
             }
         }
     }
@@ -214,4 +244,15 @@ class TableForViewModel(
 }
 
 enum class SaveState { Idle, Saving, Saved, Failed }
+
+enum class SyncStatus {
+    /** Signing in. */
+    Connecting,
+    /** Signed in, listeners running. */
+    Synced,
+    /** Firebase isn't set up or sign-in failed: the app shows sample data and saves nothing. */
+    SampleData,
+    /** A listener failed; the app keeps showing the data it already has. */
+    SyncError
+}
 

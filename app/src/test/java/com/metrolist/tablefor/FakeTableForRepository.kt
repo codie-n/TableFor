@@ -43,8 +43,15 @@ class FakeTableForRepository(
     /** When set, submitRatings throws it, like a failed Firestore batch. */
     var submitError: Throwable? = null
 
-    override suspend fun signInAnonymously() {
-        calls += "signInAnonymously"
+    /** What signIn returns: the user ID, or null for a failed sign-in. */
+    var signInResult: String? = currentUserId
+    /** When set, signIn throws it. */
+    var signInError: Throwable? = null
+
+    override suspend fun signIn(): String? {
+        calls += "signIn"
+        signInError?.let { throw it }
+        return signInResult
     }
 
     override fun getChatMessagesFlow(groupId: String): Flow<List<ChatMessage>> {

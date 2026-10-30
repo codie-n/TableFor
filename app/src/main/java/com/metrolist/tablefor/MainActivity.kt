@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -85,13 +86,16 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(currentRouteTitle, fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            Column {
+                TopAppBar(
+                    title = { Text(currentRouteTitle, fontWeight = FontWeight.Bold) },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 )
-            )
+                SyncStatusStrip(viewModel.syncStatus)
+            }
         },
         bottomBar = {
             NavigationBar {
@@ -149,7 +153,29 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
     }
 }
 
-
+/** One-line strip under the top bar when the app isn't showing live data. Hidden when synced. */
+@Composable
+fun SyncStatusStrip(status: SyncStatus) {
+    val message = when (status) {
+        SyncStatus.SampleData -> "Sample data — not connected"
+        SyncStatus.SyncError -> "Can't sync — showing saved data"
+        SyncStatus.Connecting, SyncStatus.Synced -> return
+    }
+    val isError = status == SyncStatus.SyncError
+    Surface(
+        color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.labelMedium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        )
+    }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
