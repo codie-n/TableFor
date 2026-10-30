@@ -8,14 +8,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.time.Clock
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -75,8 +79,14 @@ class TableForViewModel(
     /** Your ID: the Firebase user ID once signed in, [LOCAL_USER_ID] before that and in sample mode. */
     private var myUserId = LOCAL_USER_ID
 
-    /** The last saved availability map received from the server. */
-    private var savedSlots: Map<String, Boolean> = emptyMap()
+    /** The last saved availability map received from the server; null until the first one arrives. */
+    private var savedSlots: Map<String, Boolean>? = null
+
+    /** The first day of [availabilityGrid], which was today when the grid was built. */
+    private var weekStart: LocalDate = LocalDate.now(clock)
+
+    /** Rebuilds the week at local midnight while the app is in the foreground. */
+    private var midnightTimer: Job? = null
 
     /** Count profile saves and rating submits, so only the latest one's result reaches the screen. */
     private var profileSaves = 0
@@ -155,19 +165,66 @@ class TableForViewModel(
     }
 
     private fun generateUpcomingWeekGrid() {
-        val today = LocalDate.now(clock)
-        val dateFormat = DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())
+        weekStart = LocalDate.now(clock)
+        // Sample free slots until saved ones arrive.
+        availabilityGrid = buildWeek(weekStart).map { cell ->
+            val isAvail = (cell.dayIndex == 3 || cell.dayIndex == 4) && (cell.timeSlot == "7:00 PM" || cell.timeSlot == "8:00 PM")
+            cell.copy(isAvailable = isAvail)
+        }
+    }
 
+    /** Seven days of slots starting [today], all busy. */
+    private fun buildWeek(today: LocalDate): List<AvailabilityCell> {
+        val dateFormat = DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())
         val cells = mutableListOf<AvailabilityCell>()
         for (dayIdx in 0..6) {
             val date = today.plusDays(dayIdx.toLong())
             val dayLabel = date.format(dateFormat)
             for ((time, timeSlot) in TIME_SLOTS) {
-                val isAvail = (dayIdx == 3 || dayIdx == 4) && (timeSlot == "7:00 PM" || timeSlot == "8:00 PM")
-                cells.add(AvailabilityCell(date = date, time = time, dayIndex = dayIdx, dayLabel = dayLabel, timeSlot = timeSlot, isAvailable = isAvail))
+                cells.add(AvailabilityCell(date = date, time = time, dayIndex = dayIdx, dayLabel = dayLabel, timeSlot = timeSlot, isAvailable = false))
             }
         }
-        availabilityGrid = cells
+        return cells
+    }
+
+    /** The app came to the foreground: catch up if the date changed, then watch for midnight. */
+    fun onAppForeground() {
+        refreshWeekIfDateChanged()
+        if (midnightTimer?.isActive == true) return
+        midnightTimer = viewModelScope.launch {
+            while (true) {
+                delay(millisUntilTomorrow())
+                refreshWeekIfDateChanged()
+            }
+        }
+    }
+
+    /** The app went to the background: stop the midnight timer; [onAppForeground] catches up. */
+    fun onAppBackground() {
+        midnightTimer?.cancel()
+        midnightTimer = null
+    }
+
+    private fun millisUntilTomorrow(): Long {
+        val now = ZonedDateTime.now(clock)
+        val tomorrow = now.toLocalDate().plusDays(1).atStartOfDay(now.zone)
+        return Duration.between(now, tomorrow).toMillis().coerceAtLeast(1)
+    }
+
+    /**
+     * If today isn't the first day of the grid any more, rebuilds the week from
+     * today. Signed in, the slots come from the last saved map; otherwise the
+     * days still in the week keep what they showed.
+     */
+    private fun refreshWeekIfDateChanged() {
+        val today = LocalDate.now(clock)
+        if (today == weekStart) return
+        val shown = availabilityGrid.associate { it.slotKey to it.isAvailable }
+        val saved = savedSlots
+        availabilityGrid = buildWeek(today).map { cell ->
+            cell.copy(isAvailable = if (saved != null) saved[cell.slotKey] == true else shown[cell.slotKey] == true)
+        }
+        weekStart = today
     }
 
     /** Gives your entry in the (still mock) group the signed-in user's ID. */
@@ -300,7 +357,7 @@ class TableForViewModel(
         }
         if (sampleMode) return
         // Old-format keys and past dates in the last saved map are deleted with this write.
-        val staleKeys = AvailabilityKeys.staleKeys(savedSlots, LocalDate.now(clock))
+        val staleKeys = AvailabilityKeys.staleKeys(savedSlots.orEmpty(), LocalDate.now(clock))
         launchWrite("Saving availability") {
             repository.updateAvailability(target.slotKey, newStatus, staleKeys)
         }

@@ -37,6 +37,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.tooling.preview.Preview
 import kotlinx.serialization.Serializable
+import java.time.LocalDate
 
 // Type-safe navigation routes
 @Serializable sealed interface Screen {
@@ -71,6 +72,17 @@ class MainActivity : ComponentActivity() {
                 MainAppScaffold(viewModel)
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Rebuilds the Schedule week if the date changed while the app was away.
+        viewModel.onAppForeground()
+    }
+
+    override fun onStop() {
+        viewModel.onAppBackground()
+        super.onStop()
     }
 }
 
@@ -388,13 +400,20 @@ fun ProfileScreen(viewModel: TableForViewModel) {
     }
 }
 
+/** The Schedule day to show: [selected] while it's in [week], otherwise the first day, today. */
+internal fun scheduleDayToShow(selected: LocalDate?, week: List<LocalDate>): LocalDate? =
+    if (selected != null && selected in week) selected else week.firstOrNull()
+
 @Composable
 fun ScheduleScreen(viewModel: TableForViewModel) {
     val grid = viewModel.availabilityGrid
     val timeSlots = listOf("5:00 PM", "5:30 PM", "6:00 PM", "6:30 PM", "7:00 PM", "7:30 PM", "8:00 PM", "8:30 PM", "9:00 PM", "9:30 PM", "10:00 PM")
     
     val days = grid.map { it.dayLabel }.distinct()
-    var selectedDayIndex by remember { mutableStateOf(0) }
+    // The picker remembers a date, so it stays on that day when the week rolls over at midnight.
+    val dates = grid.map { it.date }.distinct()
+    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+    val selectedDayIndex = dates.indexOf(scheduleDayToShow(selectedDate, dates)).coerceAtLeast(0)
 
     Column(
         modifier = Modifier
@@ -428,7 +447,7 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = { if (selectedDayIndex > 0) selectedDayIndex-- },
+                    onClick = { if (selectedDayIndex > 0) selectedDate = dates[selectedDayIndex - 1] },
                     enabled = selectedDayIndex > 0
                 ) {
                     Icon(Icons.Default.ChevronLeft, contentDescription = "Previous Day")
@@ -442,7 +461,7 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
                 )
 
                 IconButton(
-                    onClick = { if (selectedDayIndex < days.size - 1) selectedDayIndex++ },
+                    onClick = { if (selectedDayIndex < dates.size - 1) selectedDate = dates[selectedDayIndex + 1] },
                     enabled = selectedDayIndex < days.size - 1
                 ) {
                     Icon(Icons.Default.ChevronRight, contentDescription = "Next Day")
