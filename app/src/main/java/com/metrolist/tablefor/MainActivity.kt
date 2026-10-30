@@ -273,7 +273,7 @@ fun ProfileScreen(
     var bio by remember(loaded) { mutableStateOf(profile.bio) }
     var location by remember(loaded) { mutableStateOf(profile.location) }
 
-    val diets = listOf("Vegetarian", "Vegan", "Halal", "Gluten-Free", "None")
+    val diets = listOf("Vegetarian", "Vegan", "Halal", "Gluten-Free", Diets.NONE)
     val cuisines = listOf("Italian", "Japanese", "Mexican", "Thai", "American", "Indian", "Mediterranean")
     val budgets = listOf("$ (Budget)", "$$ (Moderate)", "$$$ (Upscale)")
 
@@ -376,8 +376,7 @@ fun ProfileScreen(
                             FilterChip(
                                 selected = selected,
                                 onClick = {
-                                    val newDiets = if (selected) profile.diets - diet else profile.diets + diet
-                                    viewModel.updateProfile(profile.copy(diets = newDiets))
+                                    viewModel.updateProfile(profile.copy(diets = Diets.toggle(profile.diets, diet)))
                                 },
                                 enabled = loaded,
                                 label = { Text(diet) }

@@ -132,7 +132,8 @@ class TableForViewModel(
             // Each stream handles its own errors, so one failing never stops the others.
             syncStream("Profile", repository.getUserProfileFlow(userId)) { cloudProfile ->
                 // No profile document yet: start blank, not with the sample profile.
-                profile = cloudProfile ?: UserProfile.blank(userId)
+                // A saved diet list holding "None" and real diets keeps the real ones.
+                profile = cloudProfile?.let { it.copy(diets = Diets.cleaned(it.diets)) } ?: UserProfile.blank(userId)
                 profileLoaded = true
             }
 
