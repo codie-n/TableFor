@@ -273,7 +273,7 @@ class TableForViewModel(
                 if (member.id == myUserId) {
                     member.copy(
                         name = newProfile.name.ifBlank { "You" },
-                        rating = newProfile.trustRating,
+                        rating = newProfile.trustRating.takeIf { newProfile.totalRatings > 0 },
                         diet = newProfile.diets.joinToString(", ").ifEmpty { "None" }
                     )
                 } else {

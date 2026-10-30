@@ -643,9 +643,15 @@ fun MatchScreen(viewModel: TableForViewModel) {
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("${member.rating}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF8D6E63))
+                                val rating = member.rating
+                                if (rating == null) {
+                                    // Nobody has rated them yet.
+                                    Text("New", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF8D6E63))
+                                } else {
+                                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("$rating", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF8D6E63))
+                                }
                             }
                         }
                     }

@@ -73,7 +73,8 @@ data class GroupMember(
     val id: String,
     val name: String,
     val role: String,
-    val rating: Float,
+    /** Average score, or null when nobody has rated them yet. */
+    val rating: Float?,
     val diet: String
 )
 
