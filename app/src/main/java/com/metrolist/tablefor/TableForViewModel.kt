@@ -44,9 +44,9 @@ class TableForViewModel(
 
     var chatMessages by mutableStateOf<List<ChatMessage>>(
         listOf(
-            ChatMessage("1", "Sarah Jenkins", "Hey everyone! Excited for dinner on Thursday at Trattoria Bella!", "6:45 PM", false),
-            ChatMessage("2", "Marcus Vance", "Me too! Are we all good with walking there together?", "6:50 PM", false),
-            ChatMessage("3", "Alex Chen", "Sounds great! See you all there.", "6:52 PM", true)
+            ChatMessage("1", "Sarah Jenkins", "Hey everyone! Excited for dinner on Friday at Tanaka's", "6:45 PM", false),
+            ChatMessage("2", "Marcus Vance", "Me too! Are we all good with meeting in front of the place?", "6:50 PM", false),
+            ChatMessage("3", "Steve Brown", "Sounds great! See you all there.", "6:52 PM", true)
         )
     )
         private set
