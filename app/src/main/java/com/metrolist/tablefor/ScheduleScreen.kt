@@ -12,8 +12,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,6 +38,9 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
     val dates = grid.map { it.date }.distinct()
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
     val selectedDayIndex = dates.indexOf(scheduleDayToShow(selectedDate, dates)).coerceAtLeast(0)
+    // Until your saved availability is in, the cells are dimmed and say neither Free nor Busy.
+    val scheduleLoad = viewModel.scheduleLoad
+    val loaded = scheduleLoad == ScheduleLoad.Loaded
 
     Column(
         modifier = Modifier
@@ -101,15 +108,25 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
                         .padding(bottom = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Time Slot", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text("Availability", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    if (loaded) {
+                        Text("Time Slot", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Availability", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    } else {
+                        // In place of the column headings, at the same size, so the rows don't move when it loads.
+                        Text(
+                            text = if (scheduleLoad == ScheduleLoad.Failed) "Can't load your schedule right now." else "Loading your schedule…",
+                            fontSize = 14.sp,
+                            color = if (scheduleLoad == ScheduleLoad.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+                        )
+                    }
                 }
 
                 Divider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 timeSlots.forEach { timeSlot ->
                     val cell = grid.find { it.dayIndex == selectedDayIndex && it.timeSlot == timeSlot }
-                    val isAvailable = cell?.isAvailable == true
+                    val isAvailable = loaded && cell?.isAvailable == true
 
                     Row(
                         modifier = Modifier
@@ -128,19 +145,23 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
                             modifier = Modifier
                                 .width(140.dp)
                                 .height(44.dp)
+                                .alpha(if (loaded) 1f else 0.5f)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (isAvailable) MaterialTheme.colorScheme.primaryContainer else Color.LightGray.copy(alpha = 0.3f))
-                                .clickable {
-                                    viewModel.toggleAvailability(selectedDayIndex, timeSlot)
-                                },
+                                // Not clickable at all until loaded, so screen readers skip the blank cells too.
+                                .then(
+                                    if (loaded) Modifier.clickable { viewModel.toggleAvailability(selectedDayIndex, timeSlot) } else Modifier
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = if (isAvailable) "Free ✓" else "Busy",
-                                color = if (isAvailable) MaterialTheme.colorScheme.onPrimaryContainer else Color.DarkGray,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            if (loaded) {
+                                Text(
+                                    text = if (isAvailable) "Free ✓" else "Busy",
+                                    color = if (isAvailable) MaterialTheme.colorScheme.onPrimaryContainer else Color.DarkGray,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }

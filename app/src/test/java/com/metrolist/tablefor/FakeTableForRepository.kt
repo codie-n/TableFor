@@ -17,6 +17,11 @@ class FakeStream<T> {
     fun fail(error: Throwable = RuntimeException("PERMISSION_DENIED: Missing or insufficient permissions.")) {
         channel.close(error)
     }
+
+    /** Ends the stream without an error, like a listener that closes with nobody signed in. */
+    fun end() {
+        channel.close()
+    }
 }
 
 /** One updateAvailability call. */

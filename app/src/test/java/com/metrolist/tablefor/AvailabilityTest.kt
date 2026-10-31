@@ -64,6 +64,7 @@ class AvailabilityTest {
     @Test
     fun `toggling a slot saves it under its ISO date and 24-hour time`() {
         val vm = TableForViewModel(repo, TEST_CLOCK)
+        repo.availabilityStream.emit(emptyMap()) // the schedule has loaded, with nothing saved yet
 
         vm.toggleAvailability(1, "7:00 PM")
 

@@ -133,6 +133,7 @@ class OfflineSaveTest {
     @Test
     fun `a schedule toggle the server rejects shows the sync strip`() {
         val vm = TableForViewModel(repo, TEST_CLOCK)
+        repo.availabilityStream.emit(emptyMap()) // the schedule has loaded, with nothing saved yet
         repo.availabilityError = rejected
 
         vm.toggleAvailability(1, "7:00 PM")

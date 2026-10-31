@@ -54,6 +54,13 @@ class TableForViewModel(
     var availabilityGrid by mutableStateOf<List<AvailabilityCell>>(emptyList())
         private set
 
+    /**
+     * Whether [availabilityGrid] shows your saved availability yet: loaded at once in
+     * sample mode, and once the first saved map arrives when signed in. Taps wait for it.
+     */
+    var scheduleLoad by mutableStateOf(if (firebaseAvailable) ScheduleLoad.Loading else ScheduleLoad.Loaded)
+        private set
+
     /** The group as loaded. Your own entry in it is only a placeholder; [dinnerGroup] fills it in. */
     private var group by mutableStateOf<DinnerGroup?>(DinnerGroup())
 
@@ -135,6 +142,7 @@ class TableForViewModel(
             if (userId == null) {
                 syncStatus = SyncStatus.SampleData
                 generateUpcomingWeekGrid() // now with the sample free slots
+                scheduleLoad = ScheduleLoad.Loaded
                 profile = UserProfile()
                 profileLoaded = true
                 chatMessages = SAMPLE_MESSAGES
@@ -162,12 +170,19 @@ class TableForViewModel(
             }
 
             // The grid shows exactly what's saved: old-format keys and past
-            // dates match no cell, so they're ignored.
-            syncStream("Availability", repository.getAvailabilityFlow(userId)) { cloudSlots ->
+            // dates match no cell, so they're ignored. If the listener stops before
+            // the first map, by failing or ending, the schedule couldn't load; after
+            // it, the grid keeps what it shows.
+            syncStream(
+                "Availability",
+                repository.getAvailabilityFlow(userId),
+                onStopped = { if (scheduleLoad == ScheduleLoad.Loading) scheduleLoad = ScheduleLoad.Failed }
+            ) { cloudSlots ->
                 savedSlots = cloudSlots
                 availabilityGrid = availabilityGrid.map { cell ->
                     cell.copy(isAvailable = cloudSlots[cell.slotKey] == true)
                 }
+                scheduleLoad = ScheduleLoad.Loaded
             }
         }
     }
@@ -175,8 +190,14 @@ class TableForViewModel(
     /**
      * Collects one listener stream. If it fails, log it, keep the data already
      * shown and report [SyncStatus.SyncError]; the other streams keep running.
+     * [onStopped] runs once the stream stops, by failing or by ending.
      */
-    private fun <T> CoroutineScope.syncStream(name: String, stream: Flow<T>, onUpdate: (T) -> Unit) {
+    private fun <T> CoroutineScope.syncStream(
+        name: String,
+        stream: Flow<T>,
+        onStopped: () -> Unit = {},
+        onUpdate: (T) -> Unit
+    ) {
         launch {
             try {
                 stream.collect { onUpdate(it) }
@@ -186,6 +207,7 @@ class TableForViewModel(
                 Log.w(TAG, "$name sync failed; keeping current data", e)
                 syncStatus = SyncStatus.SyncError
             }
+            onStopped()
         }
     }
 
@@ -400,7 +422,9 @@ class TableForViewModel(
         launchWrite("Saving preferences") { repository.saveProfile(newProfile) }
     }
 
+    /** A Schedule tap. Ignored until the schedule has loaded, and if it couldn't load: no write, no change. */
     fun toggleAvailability(dayIndex: Int, timeSlot: String) {
+        if (scheduleLoad != ScheduleLoad.Loaded) return
         val target = availabilityGrid.find { it.dayIndex == dayIndex && it.timeSlot == timeSlot } ?: return
         val newStatus = !target.isAvailable
         availabilityGrid = availabilityGrid.map { cell ->
@@ -574,5 +598,15 @@ enum class SyncStatus {
     SampleData,
     /** A listener failed; the app keeps showing the data it already has. */
     SyncError
+}
+
+/** Whether the Schedule grid shows your availability yet. */
+enum class ScheduleLoad {
+    /** Signing in, or signed in and waiting for the first saved map. Taps do nothing. */
+    Loading,
+    /** Sample mode, or the first saved map has arrived. Taps work. */
+    Loaded,
+    /** The availability listener failed, or ended, before its first map. Taps do nothing. */
+    Failed
 }
 
