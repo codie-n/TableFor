@@ -134,6 +134,7 @@ class TableForViewModel(
             }
             if (userId == null) {
                 syncStatus = SyncStatus.SampleData
+                generateUpcomingWeekGrid() // now with the sample free slots
                 profile = UserProfile()
                 profileLoaded = true
                 chatMessages = SAMPLE_MESSAGES
@@ -188,14 +189,20 @@ class TableForViewModel(
         }
     }
 
+    /**
+     * A new week from today. In sample mode it has the sample free slots; otherwise
+     * every slot is busy until the saved ones arrive, so a signed-in user never sees
+     * availability that isn't theirs.
+     */
     private fun generateUpcomingWeekGrid() {
         weekStart = LocalDate.now(clock)
-        // Sample free slots until saved ones arrive.
-        availabilityGrid = buildWeek(weekStart).map { cell ->
-            val isAvail = (cell.dayIndex == 3 || cell.dayIndex == 4) && (cell.timeSlot == "7:00 PM" || cell.timeSlot == "8:00 PM")
-            cell.copy(isAvailable = isAvail)
-        }
+        val week = buildWeek(weekStart)
+        availabilityGrid = if (sampleMode) week.map { it.copy(isAvailable = isSampleFreeSlot(it)) } else week
     }
+
+    /** The sample free slots: days 3 and 4 at 7 and 8 PM. */
+    private fun isSampleFreeSlot(cell: AvailabilityCell) =
+        (cell.dayIndex == 3 || cell.dayIndex == 4) && (cell.timeSlot == "7:00 PM" || cell.timeSlot == "8:00 PM")
 
     /** Seven days of slots starting [today], all busy. */
     private fun buildWeek(today: LocalDate): List<AvailabilityCell> {
@@ -251,8 +258,8 @@ class TableForViewModel(
 
     /**
      * If today isn't the first day of the grid any more, rebuilds the week from
-     * today. Signed in, the slots come from the last saved map; otherwise the
-     * days still in the week keep what they showed.
+     * today. Signed in, the slots come from the last saved map, and are all busy
+     * until one arrives. In sample mode the days still in the week keep what they showed.
      */
     private fun refreshWeekIfDateChanged() {
         val today = LocalDate.now(clock)
@@ -260,7 +267,13 @@ class TableForViewModel(
         val shown = availabilityGrid.associate { it.slotKey to it.isAvailable }
         val saved = savedSlots
         availabilityGrid = buildWeek(today).map { cell ->
-            cell.copy(isAvailable = if (saved != null) saved[cell.slotKey] == true else shown[cell.slotKey] == true)
+            cell.copy(
+                isAvailable = when {
+                    saved != null -> saved[cell.slotKey] == true
+                    sampleMode -> shown[cell.slotKey] == true
+                    else -> false
+                }
+            )
         }
         weekStart = today
     }

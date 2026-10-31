@@ -49,9 +49,12 @@ class FakeTableForRepository(
     var signInResult: String? = "uid_test"
     /** When set, signIn throws it. */
     var signInError: Throwable? = null
+    /** When set, signIn waits for it, so a test can act while the app is still signing in. */
+    var signInGate: CompletableDeferred<Unit>? = null
 
     override suspend fun signIn(): String? {
         calls += "signIn"
+        signInGate?.await()
         signInError?.let { throw it }
         return signInResult
     }
