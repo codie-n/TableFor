@@ -4,11 +4,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class TableForViewModel : ViewModel() {
+class TableForViewModel(
+    private val firebaseRepository: FirebaseRepository? = FirebaseRepository()
+) : ViewModel() {
+
     var profile by mutableStateOf(UserProfile())
         private set
 
@@ -33,6 +39,68 @@ class TableForViewModel : ViewModel() {
     init {
         generateUpcomingWeekGrid()
         initRatings()
+        seedFirebaseData()
+        listenToFirebaseData()
+    }
+
+    private fun seedFirebaseData() {
+        val repo = firebaseRepository ?: return
+        viewModelScope.launch {
+            try {
+                repo.seedInitialData(
+                    profile = profile,
+                    availabilityGrid = availabilityGrid,
+                    dinnerGroup = dinnerGroup,
+                    chatMessages = chatMessages,
+                    memberRatings = memberRatings
+                )
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun listenToFirebaseData() {
+        val repo = firebaseRepository ?: return
+        viewModelScope.launch {
+            repo.getUserProfile()
+                .catch { /* Fallback to local profile */ }
+                .collect { remoteProfile ->
+                    if (remoteProfile != null) {
+                        profile = remoteProfile
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            repo.getAvailability()
+                .catch { /* Fallback to local schedule */ }
+                .collect { remoteCells ->
+                    if (remoteCells.isNotEmpty()) {
+                        availabilityGrid = remoteCells
+                    }
+                }
+        }
+
+        dinnerGroup?.groupId?.let { groupId ->
+            viewModelScope.launch {
+                repo.getDinnerGroup(groupId)
+                    .catch { /* Fallback to local group */ }
+                    .collect { remoteGroup ->
+                        if (remoteGroup != null) {
+                            dinnerGroup = remoteGroup
+                        }
+                    }
+            }
+
+            viewModelScope.launch {
+                repo.getChatMessages(groupId)
+                    .catch { /* Fallback to local messages */ }
+                    .collect { remoteMessages ->
+                        if (remoteMessages.isNotEmpty()) {
+                            chatMessages = remoteMessages
+                        }
+                    }
+            }
+        }
     }
 
     private fun generateUpcomingWeekGrid() {
@@ -76,14 +144,31 @@ class TableForViewModel : ViewModel() {
             }
             group.copy(members = updatedMembers)
         }
+
+        firebaseRepository?.let { repo ->
+            viewModelScope.launch {
+                try {
+                    repo.saveUserProfile(newProfile)
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     fun toggleAvailability(dayIndex: Int, timeSlot: String) {
-        availabilityGrid = availabilityGrid.map { cell ->
+        val updatedGrid = availabilityGrid.map { cell ->
             if (cell.dayIndex == dayIndex && cell.timeSlot == timeSlot) {
                 cell.copy(isAvailable = !cell.isAvailable)
             } else {
                 cell
+            }
+        }
+        availabilityGrid = updatedGrid
+
+        firebaseRepository?.let { repo ->
+            viewModelScope.launch {
+                try {
+                    repo.saveAvailability(cells = updatedGrid)
+                } catch (_: Exception) {}
             }
         }
     }
@@ -99,16 +184,35 @@ class TableForViewModel : ViewModel() {
             isRead = true
         )
         chatMessages = chatMessages + newMsg
+
+        val groupId = dinnerGroup?.groupId ?: return
+        firebaseRepository?.let { repo ->
+            viewModelScope.launch {
+                try {
+                    repo.sendMessage(groupId = groupId, message = newMsg)
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     fun updateRating(memberId: String, punctuality: Int, friendliness: Int, reliability: Int, notes: String) {
-        memberRatings = memberRatings.map { rating ->
+        val updatedRatings = memberRatings.map { rating ->
             if (rating.memberId == memberId) {
                 rating.copy(punctuality = punctuality, friendliness = friendliness, reliability = reliability, notes = notes)
             } else {
                 rating
             }
         }
+        memberRatings = updatedRatings
+
+        val targetRating = updatedRatings.find { it.memberId == memberId } ?: return
+        val groupId = dinnerGroup?.groupId ?: return
+        firebaseRepository?.let { repo ->
+            viewModelScope.launch {
+                try {
+                    repo.submitRating(groupId = groupId, rating = targetRating)
+                } catch (_: Exception) {}
+            }
+        }
     }
 }
-

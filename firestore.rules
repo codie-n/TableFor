@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isGroupMember(groupId) {
+      return isAuthenticated() &&
+        request.auth.uid in get(/databases/$(database)/documents/dinner_groups/$(groupId)).data.memberIds;
+    }
+
+    // --- USERS COLLECTION ---
+    // Anyone authenticated can read user profiles; users can update only their own profile
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(userId);
+      allow delete: if false; // Profiles shouldn't be deleted directly
+    }
+
+    // --- SCHEDULES / AVAILABILITY COLLECTION ---
+    // Users can read and update their own weekly schedule
+    match /schedules/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+
+    // --- DINNER GROUPS COLLECTION ---
+    // Members of a group or authenticated users can view matched groups
+    match /dinner_groups/{groupId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isGroupMember(groupId);
+
+      // --- GROUP CHAT MESSAGES SUBCOLLECTION ---
+      // Only members of the dinner group can read and post messages
+      match /messages/{messageId} {
+        allow read: if isGroupMember(groupId);
+        allow create: if isGroupMember(groupId)
+                      && request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if false; // Messages are immutable
+      }
+
+      // --- POST-DINNER RATINGS SUBCOLLECTION ---
+      // Members can submit and view member ratings for their dinner group
+      match /ratings/{ratingId} {
+        allow read: if isGroupMember(groupId);
+        allow create, update: if isGroupMember(groupId)
+                              && request.resource.data.raterUserId == request.auth.uid;
+      }
+    }
+  }
+}

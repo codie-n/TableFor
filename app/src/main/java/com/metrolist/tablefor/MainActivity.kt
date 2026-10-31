@@ -33,6 +33,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.tooling.preview.Preview
 import kotlinx.serialization.Serializable
 
@@ -71,7 +72,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainAppScaffold(viewModel: TableForViewModel) {
+fun MainAppScaffold(viewModel: TableForViewModel = viewModel()) {
     val navController = rememberNavController()
     val items = listOf(
         NavigationItem("Profile", Screen.Profile, Icons.Default.Person),
@@ -153,7 +154,7 @@ fun MainAppScaffold(viewModel: TableForViewModel) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ProfileScreen(viewModel: TableForViewModel) {
+fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
     val profile = viewModel.profile
     var name by remember { mutableStateOf(profile.name) }
     var bio by remember { mutableStateOf(profile.bio) }
@@ -342,7 +343,7 @@ fun ProfileScreen(viewModel: TableForViewModel) {
 }
 
 @Composable
-fun ScheduleScreen(viewModel: TableForViewModel) {
+fun ScheduleScreen(viewModel: TableForViewModel = viewModel()) {
     val grid = viewModel.availabilityGrid
     val timeSlots = listOf("5:00 PM", "5:30 PM", "6:00 PM", "6:30 PM", "7:00 PM", "7:30 PM", "8:00 PM", "8:30 PM", "9:00 PM", "9:30 PM", "10:00 PM")
     
@@ -477,7 +478,7 @@ fun ScheduleScreen(viewModel: TableForViewModel) {
 }
 
 @Composable
-fun MatchScreen(viewModel: TableForViewModel) {
+fun MatchScreen(viewModel: TableForViewModel = viewModel()) {
     val group = viewModel.dinnerGroup
     var isExpanded by remember { mutableStateOf(false) }
 
@@ -611,7 +612,7 @@ fun MatchScreen(viewModel: TableForViewModel) {
 }
 
 @Composable
-fun ChatScreen(viewModel: TableForViewModel) {
+fun ChatScreen(viewModel: TableForViewModel = viewModel()) {
     val messages = viewModel.chatMessages
     var inputMessage by remember { mutableStateOf("") }
 
@@ -713,7 +714,7 @@ fun ChatScreen(viewModel: TableForViewModel) {
 }
 
 @Composable
-fun RatingScreen(viewModel: TableForViewModel) {
+fun RatingScreen(viewModel: TableForViewModel = viewModel()) {
     val ratings = viewModel.memberRatings
     var submitted by remember { mutableStateOf(false) }
 
@@ -812,11 +813,28 @@ fun RatingSliderRow(label: String, score: Int, onScoreChanged: (Int) -> Unit) {
 }
 
 
+@Preview(name = "Main App Scaffold", showBackground = true, showSystemUi = true)
+@Composable
+fun MainAppScaffoldPreview() {
+    MaterialTheme(
+        colorScheme = lightColorScheme(
+            primary = Color(0xFFE65100),
+            onPrimary = Color.White,
+            primaryContainer = Color(0xFFFFCC80),
+            secondary = Color(0xFF00796B),
+            background = Color(0xFFFAFAFA),
+            surface = Color.White
+        )
+    ) {
+        MainAppScaffold()
+    }
+}
+
 @Preview(name = "Profile Screen", showBackground = true)
 @Composable
 fun ProfileScreenPreview() {
     MaterialTheme {
-        ProfileScreen(viewModel = TableForViewModel())
+        ProfileScreen()
     }
 }
 
@@ -824,7 +842,7 @@ fun ProfileScreenPreview() {
 @Composable
 fun ScheduleScreenPreview() {
     MaterialTheme {
-        ScheduleScreen(viewModel = TableForViewModel())
+        ScheduleScreen()
     }
 }
 
@@ -832,7 +850,7 @@ fun ScheduleScreenPreview() {
 @Composable
 fun MatchScreenPreview() {
     MaterialTheme {
-        MatchScreen(viewModel = TableForViewModel())
+        MatchScreen()
     }
 }
 
@@ -840,7 +858,7 @@ fun MatchScreenPreview() {
 @Composable
 fun ChatScreenPreview() {
     MaterialTheme {
-        ChatScreen(viewModel = TableForViewModel())
+        ChatScreen()
     }
 }
 
@@ -848,6 +866,6 @@ fun ChatScreenPreview() {
 @Composable
 fun RatingScreenPreview() {
     MaterialTheme {
-        RatingScreen(viewModel = TableForViewModel())
+        RatingScreen()
     }
 }
