@@ -40,8 +40,8 @@ class TableForViewModel @JvmOverloads constructor(
 
     var chatMessages by mutableStateOf<List<ChatMessage>>(
         listOf(
-            ChatMessage("1", "Sarah Jenkins", "Hey everyone! Excited for dinner on Thursday at Trattoria Bella!", "6:45 PM", false),
-            ChatMessage("2", "Marcus Vance", "Me too! Are we all good with walking there together?", "6:50 PM", false),
+            ChatMessage("1", "Sarah Jenkins", "Hey everyone! Excited for dinner on Friday at Tanaka's", "6:45 PM", false),
+            ChatMessage("2", "Marcus Vance", "Me too! Are we all good with meeting in front of the place?", "6:50 PM", false),
             ChatMessage("3", "Alex Chen", "Sounds great! See you all there.", "6:52 PM", true)
         )
     )
@@ -297,7 +297,9 @@ class TableForViewModel @JvmOverloads constructor(
     fun toggleAvailability(dayIndex: Int, timeSlot: String) {
         val updatedGrid = availabilityGrid.map { cell ->
             if (cell.dayIndex == dayIndex && cell.timeSlot == timeSlot) {
-                cell.copy(isAvailable = !cell.isAvailable)
+                val newStatus = !cell.isAvailable
+                updatedStatus = newStatus
+                cell.copy(isAvailable = newStatus)
             } else {
                 cell
             }
@@ -315,11 +317,12 @@ class TableForViewModel @JvmOverloads constructor(
 
     fun sendMessage(text: String) {
         if (text.isBlank()) return
+        val currentTimestamp = SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date())
         val newMsg = ChatMessage(
             id = System.currentTimeMillis().toString(),
             senderName = profile.name,
             text = text,
-            timestamp = SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date()),
+            timestamp = currentTimestamp,
             isMe = true,
             isRead = true
         )
