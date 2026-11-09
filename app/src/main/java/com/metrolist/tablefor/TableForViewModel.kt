@@ -1,5 +1,6 @@
 package com.metrolist.tablefor
 
+import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -11,9 +12,22 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class TableForViewModel(
-    private val firebaseRepository: FirebaseRepository? = FirebaseRepository()
+class TableForViewModel @JvmOverloads constructor(
+    application: Application? = null,
+    private val firebaseRepository: FirebaseRepository? = FirebaseRepository(application?.applicationContext)
 ) : ViewModel() {
+
+    var isLoggedIn by mutableStateOf(firebaseRepository?.isLoggedIn == true)
+        private set
+
+    var authError by mutableStateOf<String?>(null)
+        private set
+
+    var isAuthLoading by mutableStateOf(false)
+        private set
+
+    var currentUserId by mutableStateOf(firebaseRepository?.currentUserId ?: "")
+        private set
 
     var profile by mutableStateOf(UserProfile())
         private set
@@ -39,8 +53,134 @@ class TableForViewModel(
     init {
         generateUpcomingWeekGrid()
         initRatings()
-        seedFirebaseData()
-        listenToFirebaseData()
+        observeAuthState()
+    }
+
+    private fun observeAuthState() {
+        val repo = firebaseRepository ?: return
+        viewModelScope.launch {
+            repo.getAuthState().collect { user ->
+                if (user != null) {
+                    currentUserId = user.uid
+                    isLoggedIn = true
+                    listenToFirebaseData()
+                } else {
+                    currentUserId = ""
+                    isLoggedIn = false
+                }
+            }
+        }
+    }
+
+    fun signUp(email: String, password: String, confirmPassword: String, name: String) {
+        authError = null
+        if (email.isBlank() || password.isBlank() || name.isBlank()) {
+            authError = "Please fill in all fields."
+            return
+        }
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+            authError = "Please enter a valid email address."
+            return
+        }
+        if (password.length < 6) {
+            authError = "Password must be at least 6 characters long."
+            return
+        }
+        if (password != confirmPassword) {
+            authError = "Passwords do not match."
+            return
+        }
+
+        val repo = firebaseRepository ?: return
+        isAuthLoading = true
+        viewModelScope.launch {
+            try {
+                val newProfile = repo.signUp(email, password, name)
+                profile = newProfile
+                currentUserId = newProfile.id
+                isLoggedIn = true
+                authError = null
+                listenToFirebaseData()
+            } catch (e: Exception) {
+                authError = parseAuthException(e)
+            } finally {
+                isAuthLoading = false
+            }
+        }
+    }
+
+    fun signIn(email: String, password: String) {
+        authError = null
+        if (email.isBlank() || password.isBlank()) {
+            authError = "Please enter both email and password."
+            return
+        }
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+            authError = "Please enter a valid email address."
+            return
+        }
+
+        val repo = firebaseRepository ?: return
+        isAuthLoading = true
+        viewModelScope.launch {
+            try {
+                val loggedInProfile = repo.signIn(email, password)
+                profile = loggedInProfile
+                currentUserId = loggedInProfile.id
+                isLoggedIn = true
+                authError = null
+                listenToFirebaseData()
+            } catch (e: Exception) {
+                authError = parseAuthException(e)
+            } finally {
+                isAuthLoading = false
+            }
+        }
+    }
+
+    fun signOut() {
+        firebaseRepository?.signOut()
+        isLoggedIn = false
+        currentUserId = ""
+        authError = null
+    }
+
+    fun clearAuthError() {
+        authError = null
+    }
+
+    private fun parseAuthException(e: Exception): String {
+        val msg = e.localizedMessage ?: e.message ?: ""
+        return when {
+            msg.contains("does not exist in the database", ignoreCase = true) ->
+                "User account does not exist in the database. Please sign up first."
+
+            msg.contains("already exists", ignoreCase = true) ||
+            msg.contains("already in use", ignoreCase = true) ||
+            msg.contains("email-already-in-use", ignoreCase = true) ||
+            e is com.google.firebase.auth.FirebaseAuthUserCollisionException ->
+                "An account with this email address already exists. Please sign in instead."
+
+            msg.contains("badly formatted", ignoreCase = true) ||
+            msg.contains("invalid email", ignoreCase = true) ->
+                "Please enter a valid email address."
+
+            msg.contains("wrong-password", ignoreCase = true) ||
+            msg.contains("INVALID_LOGIN_CREDENTIALS", ignoreCase = true) ||
+            msg.contains("user-not-found", ignoreCase = true) ||
+            msg.contains("Invalid email or password", ignoreCase = true) ||
+            e is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException ||
+            e is com.google.firebase.auth.FirebaseAuthInvalidUserException ->
+                "Invalid email or password."
+
+            msg.contains("API key not valid", ignoreCase = true) || msg.contains("API_KEY_NOT_VALID", ignoreCase = true) ->
+                "Invalid Firebase API key in app/google-services.json. Please update with a valid API key from Firebase Console."
+
+            msg.contains("at least 6 characters", ignoreCase = true) || msg.contains("weak password", ignoreCase = true) ->
+                "Password must be at least 6 characters long."
+
+            else -> msg.ifBlank { "Invalid email or password." }
+        }
     }
 
     private fun seedFirebaseData() {

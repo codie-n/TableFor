@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -64,7 +65,11 @@ class MainActivity : ComponentActivity() {
                     surface = Color.White
                 )
             ) {
-                MainAppScaffold(viewModel)
+                if (!viewModel.isLoggedIn) {
+                    AuthScreen(viewModel = viewModel)
+                } else {
+                    MainAppScaffold(viewModel = viewModel)
+                }
             }
         }
     }
@@ -88,6 +93,11 @@ fun MainAppScaffold(viewModel: TableForViewModel = viewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text(currentRouteTitle, fontWeight = FontWeight.Bold) },
+                actions = {
+                    IconButton(onClick = { viewModel.signOut() }) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Sign Out")
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -337,6 +347,20 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Profile saved successfully!", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedButton(
+                onClick = { viewModel.signOut() },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().height(54.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sign Out", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
