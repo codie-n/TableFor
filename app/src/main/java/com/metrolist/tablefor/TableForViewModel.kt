@@ -1,18 +1,33 @@
 package com.metrolist.tablefor
 
+import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class TableForViewModel(
-    private val repository: TableForRepository = TableForRepository()
+class TableForViewModel @JvmOverloads constructor(
+    application: Application? = null,
+    private val firebaseRepository: FirebaseRepository? = FirebaseRepository(application?.applicationContext)
 ) : ViewModel() {
+
+    var isLoggedIn by mutableStateOf(firebaseRepository?.isLoggedIn == true)
+        private set
+
+    var authError by mutableStateOf<String?>(null)
+        private set
+
+    var isAuthLoading by mutableStateOf(false)
+        private set
+
+    var currentUserId by mutableStateOf(firebaseRepository?.currentUserId ?: "")
+        private set
 
     var profile by mutableStateOf(UserProfile())
         private set
@@ -38,46 +53,192 @@ class TableForViewModel(
     init {
         generateUpcomingWeekGrid()
         initRatings()
-        initializeFirestoreSync()
+        observeAuthState()
     }
 
-    private fun initializeFirestoreSync() {
+    private fun observeAuthState() {
+        val repo = firebaseRepository ?: return
         viewModelScope.launch {
-            repository.signInAnonymously()
-
-            // Observe User Profile
-            launch {
-                repository.getUserProfileFlow().collect { cloudProfile ->
-                    if (cloudProfile != null) {
-                        profile = cloudProfile
-                    }
+            repo.getAuthState().collect { user ->
+                if (user != null) {
+                    currentUserId = user.uid
+                    isLoggedIn = true
+                    listenToFirebaseData()
+                } else {
+                    currentUserId = ""
+                    isLoggedIn = false
                 }
             }
+        }
+    }
 
-            // Observe Realtime Group Chat Messages
-            launch {
-                val groupId = dinnerGroup?.groupId ?: "group_101"
-                repository.getChatMessagesFlow(groupId).collect { cloudMessages ->
-                    if (cloudMessages.isNotEmpty()) {
-                        chatMessages = cloudMessages
+    fun signUp(email: String, password: String, confirmPassword: String, name: String) {
+        authError = null
+        if (email.isBlank() || password.isBlank() || name.isBlank()) {
+            authError = "Please fill in all fields."
+            return
+        }
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+            authError = "Please enter a valid email address."
+            return
+        }
+        if (password.length < 6) {
+            authError = "Password must be at least 6 characters long."
+            return
+        }
+        if (password != confirmPassword) {
+            authError = "Passwords do not match."
+            return
+        }
+
+        val repo = firebaseRepository ?: return
+        isAuthLoading = true
+        viewModelScope.launch {
+            try {
+                val newProfile = repo.signUp(email, password, name)
+                profile = newProfile
+                currentUserId = newProfile.id
+                isLoggedIn = true
+                authError = null
+                listenToFirebaseData()
+            } catch (e: Exception) {
+                authError = parseAuthException(e)
+            } finally {
+                isAuthLoading = false
+            }
+        }
+    }
+
+    fun signIn(email: String, password: String) {
+        authError = null
+        if (email.isBlank() || password.isBlank()) {
+            authError = "Please enter both email and password."
+            return
+        }
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+            authError = "Please enter a valid email address."
+            return
+        }
+
+        val repo = firebaseRepository ?: return
+        isAuthLoading = true
+        viewModelScope.launch {
+            try {
+                val loggedInProfile = repo.signIn(email, password)
+                profile = loggedInProfile
+                currentUserId = loggedInProfile.id
+                isLoggedIn = true
+                authError = null
+                listenToFirebaseData()
+            } catch (e: Exception) {
+                authError = parseAuthException(e)
+            } finally {
+                isAuthLoading = false
+            }
+        }
+    }
+
+    fun signOut() {
+        firebaseRepository?.signOut()
+        isLoggedIn = false
+        currentUserId = ""
+        authError = null
+    }
+
+    fun clearAuthError() {
+        authError = null
+    }
+
+    private fun parseAuthException(e: Exception): String {
+        val msg = e.localizedMessage ?: e.message ?: ""
+        return when {
+            msg.contains("does not exist in the database", ignoreCase = true) ->
+                "User account does not exist in the database. Please sign up first."
+
+            msg.contains("already exists", ignoreCase = true) ||
+            msg.contains("already in use", ignoreCase = true) ||
+            msg.contains("email-already-in-use", ignoreCase = true) ||
+            e is com.google.firebase.auth.FirebaseAuthUserCollisionException ->
+                "An account with this email address already exists. Please sign in instead."
+
+            msg.contains("badly formatted", ignoreCase = true) ||
+            msg.contains("invalid email", ignoreCase = true) ->
+                "Please enter a valid email address."
+
+            msg.contains("wrong-password", ignoreCase = true) ||
+            msg.contains("INVALID_LOGIN_CREDENTIALS", ignoreCase = true) ||
+            msg.contains("user-not-found", ignoreCase = true) ||
+            msg.contains("Invalid email or password", ignoreCase = true) ||
+            e is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException ||
+            e is com.google.firebase.auth.FirebaseAuthInvalidUserException ->
+                "Invalid email or password."
+
+            msg.contains("API key not valid", ignoreCase = true) || msg.contains("API_KEY_NOT_VALID", ignoreCase = true) ->
+                "Invalid Firebase API key in app/google-services.json. Please update with a valid API key from Firebase Console."
+
+            msg.contains("at least 6 characters", ignoreCase = true) || msg.contains("weak password", ignoreCase = true) ->
+                "Password must be at least 6 characters long."
+
+            else -> msg.ifBlank { "Invalid email or password." }
+        }
+    }
+
+    private fun seedFirebaseData() {
+        val repo = firebaseRepository ?: return
+        viewModelScope.launch {
+            try {
+                repo.seedInitialData(
+                    profile = profile,
+                    availabilityGrid = availabilityGrid,
+                    dinnerGroup = dinnerGroup,
+                    chatMessages = chatMessages,
+                    memberRatings = memberRatings
+                )
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun listenToFirebaseData() {
+        val repo = firebaseRepository ?: return
+        viewModelScope.launch {
+            repo.getUserProfile()
+                .catch { /* Fallback to local profile */ }
+                .collect { remoteProfile ->
+                    if (remoteProfile != null) {
+                        profile = remoteProfile
                     }
                 }
-            }
+        }
 
-            // Observe Schedule Availability
-            launch {
-                repository.getAvailabilityFlow().collect { cloudSlots ->
-                    if (cloudSlots.isNotEmpty()) {
-                        availabilityGrid = availabilityGrid.map { cell ->
-                            val key = "${cell.dayIndex}_${cell.timeSlot}"
-                            if (cloudSlots.containsKey(key)) {
-                                cell.copy(isAvailable = cloudSlots[key] == true)
-                            } else {
-                                cell
-                            }
+        viewModelScope.launch {
+            repo.getAvailability()
+                .catch { /* Fallback to local schedule */ }
+                .collect { remoteCells ->
+                    if (remoteCells.isNotEmpty()) {
+                        availabilityGrid = remoteCells
+                    }
+                }
+        }
+
+        dinnerGroup?.groupId?.let { groupId ->
+            viewModelScope.launch {
+                repo.getDinnerGroup(groupId)
+                    .catch { /* Fallback to local group */ }
+                    .collect { remoteGroup ->
+                        if (remoteGroup != null) {
+                            dinnerGroup = remoteGroup
                         }
                     }
-                }
+            }
+
+            viewModelScope.launch {
+                repo.getChatMessages(groupId)
+                    .catch { /* Fallback to local messages */ }
+                    .collect { remoteMessages ->
+                        if (remoteMessages.isNotEmpty()) {
+                            chatMessages = remoteMessages
+                        }
+                    }
             }
         }
     }
@@ -123,14 +284,18 @@ class TableForViewModel(
             }
             group.copy(members = updatedMembers)
         }
-        viewModelScope.launch {
-            repository.saveProfile(newProfile)
+
+        firebaseRepository?.let { repo ->
+            viewModelScope.launch {
+                try {
+                    repo.saveUserProfile(newProfile)
+                } catch (_: Exception) {}
+            }
         }
     }
 
     fun toggleAvailability(dayIndex: Int, timeSlot: String) {
-        var updatedStatus = false
-        availabilityGrid = availabilityGrid.map { cell ->
+        val updatedGrid = availabilityGrid.map { cell ->
             if (cell.dayIndex == dayIndex && cell.timeSlot == timeSlot) {
                 val newStatus = !cell.isAvailable
                 updatedStatus = newStatus
@@ -139,8 +304,14 @@ class TableForViewModel(
                 cell
             }
         }
-        viewModelScope.launch {
-            repository.updateAvailability(dayIndex, timeSlot, updatedStatus)
+        availabilityGrid = updatedGrid
+
+        firebaseRepository?.let { repo ->
+            viewModelScope.launch {
+                try {
+                    repo.saveAvailability(cells = updatedGrid)
+                } catch (_: Exception) {}
+            }
         }
     }
 
@@ -157,24 +328,34 @@ class TableForViewModel(
         )
         chatMessages = chatMessages + newMsg
 
-        viewModelScope.launch {
-            val groupId = dinnerGroup?.groupId ?: "group_101"
-            repository.sendMessage(groupId, text, profile.name)
+        val groupId = dinnerGroup?.groupId ?: return
+        firebaseRepository?.let { repo ->
+            viewModelScope.launch {
+                try {
+                    repo.sendMessage(groupId = groupId, message = newMsg)
+                } catch (_: Exception) {}
+            }
         }
     }
 
     fun updateRating(memberId: String, punctuality: Int, friendliness: Int, reliability: Int, notes: String) {
-        memberRatings = memberRatings.map { rating ->
+        val updatedRatings = memberRatings.map { rating ->
             if (rating.memberId == memberId) {
                 rating.copy(punctuality = punctuality, friendliness = friendliness, reliability = reliability, notes = notes)
             } else {
                 rating
             }
         }
-        viewModelScope.launch {
-            val groupId = dinnerGroup?.groupId ?: "group_101"
-            repository.submitRatings(groupId, memberRatings)
+        memberRatings = updatedRatings
+
+        val targetRating = updatedRatings.find { it.memberId == memberId } ?: return
+        val groupId = dinnerGroup?.groupId ?: return
+        firebaseRepository?.let { repo ->
+            viewModelScope.launch {
+                try {
+                    repo.submitRating(groupId = groupId, rating = targetRating)
+                } catch (_: Exception) {}
+            }
         }
     }
 }
-
