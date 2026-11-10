@@ -454,7 +454,8 @@ fun ScheduleScreen(viewModel: TableForViewModel = viewModel()) {
                 Divider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 timeSlots.forEach { timeSlot ->
-                    val cell = grid.find { it.dayIndex == selectedDayIndex && it.timeSlot == timeSlot }
+                    val currentDayLabel = if (days.isNotEmpty() && selectedDayIndex < days.size) days[selectedDayIndex] else ""
+                    val cell = grid.find { (it.dayIndex == selectedDayIndex || (currentDayLabel.isNotEmpty() && it.dayLabel == currentDayLabel)) && it.timeSlot == timeSlot }
                     val isAvailable = cell?.isAvailable == true
 
                     Row(
@@ -477,7 +478,7 @@ fun ScheduleScreen(viewModel: TableForViewModel = viewModel()) {
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (isAvailable) MaterialTheme.colorScheme.primaryContainer else Color.LightGray.copy(alpha = 0.3f))
                                 .clickable {
-                                    viewModel.toggleAvailability(selectedDayIndex, timeSlot)
+                                    viewModel.toggleAvailability(selectedDayIndex, timeSlot, currentDayLabel)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
