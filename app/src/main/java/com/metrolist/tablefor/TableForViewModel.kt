@@ -298,7 +298,7 @@ class TableForViewModel @JvmOverloads constructor(
         val updatedGrid = availabilityGrid.map { cell ->
             if (cell.dayIndex == dayIndex && cell.timeSlot == timeSlot) {
                 val newStatus = !cell.isAvailable
-                updatedStatus = newStatus
+                val updatedStatus = newStatus
                 cell.copy(isAvailable = newStatus)
             } else {
                 cell

@@ -71,7 +71,9 @@ class FirebaseRepository(
                         val budget = parts[5]
                         val rating = parts[6].toFloatOrNull() ?: 5.0f
                         val count = parts[7].toIntOrNull() ?: 0
-                        val profile = UserProfile(id, name, bio, loc, emptyList(), listOf("Italian", "Japanese"), budget, rating, count)
+                        val diets = if (parts.size >= 9 && parts[8].isNotBlank()) parts[8].split(",") else emptyList()
+                        val cuisines = if (parts.size >= 10 && parts[9].isNotBlank()) parts[9].split(",") else listOf("Italian", "Japanese")
+                        val profile = UserProfile(id, name, bio, loc, diets, cuisines, budget, rating, count)
                         demoAccountsDb[email] = DemoAccount(email, pwd, profile)
                     }
                 } catch (_: Exception) {}
@@ -82,7 +84,9 @@ class FirebaseRepository(
     private fun saveDemoAccountToPrefs(account: DemoAccount) {
         val prefs = getPrefs() ?: return
         val p = account.profile
-        val serialized = "${account.passwordHash}|||${p.id}|||${p.name}|||${p.bio}|||${p.location}|||${p.budget}|||${p.trustRating}|||${p.totalRatings}"
+        val dietsJoined = p.diets.joinToString(",")
+        val cuisinesJoined = p.cuisinePreferences.joinToString(",")
+        val serialized = "${account.passwordHash}|||${p.id}|||${p.name}|||${p.bio}|||${p.location}|||${p.budget}|||${p.trustRating}|||${p.totalRatings}|||${dietsJoined}|||${cuisinesJoined}"
         prefs.edit().putString(account.email, serialized).apply()
     }
 
@@ -251,31 +255,44 @@ class FirebaseRepository(
     fun getUserProfile(userId: String = currentUserId): Flow<UserProfile?> = callbackFlow {
         val fs = firestore
         if (fs == null) {
-            trySend(null)
+            val localProfile = demoAccountsDb.values.find { it.profile.id == userId }?.profile
+            trySend(localProfile)
             awaitClose { }
             return@callbackFlow
         }
         val docRef = fs.collection("users").document(userId)
         val subscription = docRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
-                close(error)
+                val localProfile = demoAccountsDb.values.find { it.profile.id == userId }?.profile
+                trySend(localProfile)
                 return@addSnapshotListener
             }
             if (snapshot != null && snapshot.exists()) {
                 val firestoreUser = snapshot.toObject(FirestoreUserProfile::class.java)
                 trySend(firestoreUser?.toUserProfile())
             } else {
-                trySend(null)
+                val localProfile = demoAccountsDb.values.find { it.profile.id == userId }?.profile
+                trySend(localProfile)
             }
         }
         awaitClose { subscription.remove() }
     }
 
     suspend fun saveUserProfile(profile: UserProfile) {
-        val fs = firestore ?: return
-        val docRef = fs.collection("users").document(profile.id)
-        val firestoreUser = FirestoreUserProfile.fromUserProfile(profile)
-        docRef.set(firestoreUser).await()
+        val fs = firestore
+        if (fs != null) {
+            try {
+                val docRef = fs.collection("users").document(profile.id)
+                val firestoreUser = FirestoreUserProfile.fromUserProfile(profile)
+                docRef.set(firestoreUser).await()
+            } catch (_: Exception) {}
+        }
+        val entry = demoAccountsDb.entries.find { it.value.profile.id == profile.id }
+        if (entry != null) {
+            val updatedAccount = entry.value.copy(profile = profile)
+            demoAccountsDb[entry.key] = updatedAccount
+            saveDemoAccountToPrefs(updatedAccount)
+        }
     }
 
     // --- SCHEDULES ---

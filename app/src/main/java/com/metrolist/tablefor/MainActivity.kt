@@ -172,6 +172,13 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
     var selectedBudget by remember { mutableStateOf(profile.budget) }
     var savedMessage by remember { mutableStateOf(false) }
 
+    LaunchedEffect(profile) {
+        name = profile.name
+        bio = profile.bio
+        location = profile.location
+        selectedBudget = profile.budget
+    }
+
     val diets = listOf("Vegetarian", "Vegan", "Halal", "Gluten-Free", "None")
     val cuisines = listOf("Italian", "Japanese", "Mexican", "Thai", "American", "Indian", "Mediterranean")
     val budgets = listOf("$ (Budget)", "$$ (Moderate)", "$$$ (Upscale)")
