@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -16,9 +17,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -83,7 +89,6 @@ fun MainAppScaffold(viewModel: TableForViewModel = viewModel()) {
         NavigationItem("Profile", Screen.Profile, Icons.Default.Person),
         NavigationItem("Schedule", Screen.Schedule, Icons.Default.DateRange),
         NavigationItem("Match", Screen.Match, Icons.Default.Groups),
-        NavigationItem("Chat", Screen.Chat, Icons.Default.Chat),
         NavigationItem("Rate", Screen.Rate, Icons.Default.Star)
     )
 
@@ -148,7 +153,13 @@ fun MainAppScaffold(viewModel: TableForViewModel = viewModel()) {
                 ScheduleScreen(viewModel = viewModel)
             }
             composable<Screen.Match> {
-                MatchScreen(viewModel = viewModel)
+                MatchScreen(
+                    viewModel = viewModel,
+                    onOpenChat = {
+                        currentRouteTitle = "Group Chat"
+                        navController.navigate(Screen.Chat)
+                    }
+                )
             }
             composable<Screen.Chat> {
                 ChatScreen(viewModel = viewModel)
@@ -170,198 +181,300 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
     var bio by remember { mutableStateOf(profile.bio) }
     var location by remember { mutableStateOf(profile.location) }
     var selectedBudget by remember { mutableStateOf(profile.budget) }
-    var savedMessage by remember { mutableStateOf(false) }
 
-    val diets = listOf("Vegetarian", "Vegan", "Halal", "Gluten-Free", "None")
+    LaunchedEffect(profile) {
+        name = profile.name
+        bio = profile.bio
+        location = profile.location
+        selectedBudget = profile.budget
+    }
+
+    val diets = listOf("Vegetarian", "Vegan", "Halal", "Gluten-Free")
     val cuisines = listOf("Italian", "Japanese", "Mexican", "Thai", "American", "Indian", "Mediterranean")
     val budgets = listOf("$ (Budget)", "$$ (Moderate)", "$$$ (Upscale)")
+    val cities = listOf("Honolulu", "Downtown", "Waikiki", "Ala Moana", "Kakaako", "Kailua")
+    var showCityMenu by remember { mutableStateOf(false) }
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.fillMaxWidth()
+        // Compact Header: Trust Score + Sign Out
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    modifier = Modifier.padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Trust & Reliability Score", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("${profile.trustRating} ★ (${profile.totalRatings} dinners)", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text("High reliability tier - No-show protected", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Verified, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                        Icon(Icons.Default.Verified, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                     }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text("Reliability Tier", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${profile.trustRating} ★ (${profile.totalRatings} dinners)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                IconButton(onClick = { viewModel.signOut() }) {
+                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Sign Out", tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
 
-        item {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Personal Information", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                    OutlinedTextField(
+        // Personal Details Card (Auto-Saves on change)
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Personal Info", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Full Name Field
+                    TextField(
                         value = name,
-                        onValueChange = { name = it },
-                        label = { Text("Full Name") },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        onValueChange = {
+                            name = it
+                            viewModel.updateProfile(profile.copy(name = it, bio = bio, location = location))
+                        },
+                        label = { Text("Full Name", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        placeholder = { Text("e.g. Alex Chen") },
+                        leadingIcon = { Icon(Icons.Default.PersonOutline, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        trailingIcon = {
+                            if (name.isNotEmpty()) {
+                                IconButton(
+                                    onClick = {
+                                        name = ""
+                                        viewModel.updateProfile(profile.copy(name = "", bio = bio, location = location))
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear name", modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Words,
+                            imeAction = ImeAction.Next
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        ),
+                        modifier = Modifier.weight(1f)
                     )
-                    OutlinedTextField(
-                        value = location,
-                        onValueChange = { location = it },
-                        label = { Text("City / Neighborhood (e.g., Downtown)") },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                        leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null) }
-                    )
-                    OutlinedTextField(
-                        value = bio,
-                        onValueChange = { bio = it },
-                        label = { Text("Bio / About Me") },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                        maxLines = 3
-                    )
-                }
-            }
-        }
 
-        item {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Dietary Preferences", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        diets.forEach { diet ->
-                            val selected = profile.diets.contains(diet)
-                            FilterChip(
-                                selected = selected,
-                                onClick = {
-                                    val newDiets = if (selected) profile.diets - diet else profile.diets + diet
-                                    viewModel.updateProfile(profile.copy(diets = newDiets))
-                                },
-                                label = { Text(diet) }
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("Cuisine Preferences", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        cuisines.forEach { cuisine ->
-                            val selected = profile.cuisinePreferences.contains(cuisine)
-                            FilterChip(
-                                selected = selected,
-                                onClick = {
-                                    val newCuisines = if (selected) profile.cuisinePreferences - cuisine else profile.cuisinePreferences + cuisine
-                                    viewModel.updateProfile(profile.copy(cuisinePreferences = newCuisines))
-                                },
-                                label = { Text(cuisine) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Dining Budget", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                    budgets.forEach { b ->
-                        Row(
+                    // Location Only Icon Button + Dropdown Menu
+                    Box(modifier = Modifier.align(Alignment.CenterVertically)) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    selectedBudget = b
-                                    viewModel.updateProfile(profile.copy(budget = b))
-                                }
-                                .padding(horizontal = 8.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .size(48.dp)
+                                .clickable { showCityMenu = true }
                         ) {
-                            RadioButton(
-                                selected = (selectedBudget == b),
-                                onClick = {
-                                    selectedBudget = b
-                                    viewModel.updateProfile(profile.copy(budget = b))
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(b, fontWeight = FontWeight.Medium)
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.LocationOn,
+                                    contentDescription = "Location: $location",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
+
+                        DropdownMenu(
+                            expanded = showCityMenu,
+                            onDismissRequest = { showCityMenu = false }
+                        ) {
+                            cities.forEach { city ->
+                                DropdownMenuItem(
+                                    text = { Text(city, fontWeight = if (location == city) FontWeight.Bold else FontWeight.Normal) },
+                                    leadingIcon = { Icon(Icons.Default.LocationCity, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                    onClick = {
+                                        location = city
+                                        viewModel.updateProfile(profile.copy(name = name, bio = bio, location = city))
+                                        showCityMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // About Me / Bio Field (Compact height)
+                TextField(
+                    value = bio,
+                    onValueChange = {
+                        bio = it
+                        viewModel.updateProfile(profile.copy(name = name, bio = it, location = location))
+                    },
+                    label = { Text("About Me / Bio", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    placeholder = { Text("Share a bit about yourself...") },
+                    leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    trailingIcon = {
+                        if (bio.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    bio = ""
+                                    viewModel.updateProfile(profile.copy(name = name, bio = "", location = location))
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear bio", modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction = ImeAction.Done
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        // Unified Preferences & Budget Card (Auto-Saves on change)
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Dining Budget Row
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AttachMoney, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Dining Budget", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    budgets.forEach { b ->
+                        val selected = (selectedBudget == b)
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                selectedBudget = b
+                                viewModel.updateProfile(profile.copy(budget = b))
+                            },
+                            label = { Text(b, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
+                            leadingIcon = if (selected) {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                            } else null,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // Dietary Preferences
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.RestaurantMenu, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Dietary Restrictions", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                }
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    diets.forEach { diet ->
+                        val selected = profile.diets.contains(diet)
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                val newDiets = if (selected) profile.diets - diet else profile.diets + diet
+                                viewModel.updateProfile(profile.copy(diets = newDiets))
+                            },
+                            label = { Text(diet, fontSize = 12.sp) },
+                            leadingIcon = if (selected) {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                            } else null
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // Cuisine Preferences
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Fastfood, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Preferred Cuisines", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                }
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    cuisines.forEach { cuisine ->
+                        val selected = profile.cuisinePreferences.contains(cuisine)
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                val newCuisines = if (selected) profile.cuisinePreferences - cuisine else profile.cuisinePreferences + cuisine
+                                viewModel.updateProfile(profile.copy(cuisinePreferences = newCuisines))
+                            },
+                            label = { Text(cuisine, fontSize = 12.sp) },
+                            leadingIcon = if (selected) {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                            } else null
+                        )
                     }
                 }
             }
         }
 
-        item {
-            Button(
-                onClick = {
-                    viewModel.updateProfile(profile.copy(name = name, bio = bio, location = location, budget = selectedBudget))
-                    savedMessage = true
-                },
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().height(54.dp)
-            ) {
-                Text("Save Profile & Preferences", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-            if (savedMessage) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Profile saved successfully!", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedButton(
-                onClick = { viewModel.signOut() },
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().height(54.dp)
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Sign Out", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
+        // Auto-Save Status Indicator
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.CloudDone, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "Changes auto-saved to database",
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp
+            )
         }
     }
 }
@@ -369,142 +482,179 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
 @Composable
 fun ScheduleScreen(viewModel: TableForViewModel = viewModel()) {
     val grid = viewModel.availabilityGrid
-    val timeSlots = listOf("5:00 PM", "5:30 PM", "6:00 PM", "6:30 PM", "7:00 PM", "7:30 PM", "8:00 PM", "8:30 PM", "9:00 PM", "9:30 PM", "10:00 PM")
-    
+    val timeSlots = listOf(
+        "5:00 PM", "5:30 PM", "6:00 PM",
+        "6:30 PM", "7:00 PM", "7:30 PM",
+        "8:00 PM", "8:30 PM", "9:00 PM",
+        "9:30 PM", "10:00 PM"
+    )
+
     val days = grid.map { it.dayLabel }.distinct()
     var selectedDayIndex by remember { mutableStateOf(0) }
+    val currentDayLabel = if (days.isNotEmpty() && selectedDayIndex < days.size) days[selectedDayIndex] else ""
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Compact Header Card
         Card(
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
             modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text("Set Your Dinner Availability", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("Tap the spreadsheet cells below to set when you are free for dinner.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
-            }
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                IconButton(
-                    onClick = { if (selectedDayIndex > 0) selectedDayIndex-- },
-                    enabled = selectedDayIndex > 0
-                ) {
-                    Icon(Icons.Default.ChevronLeft, contentDescription = "Previous Day")
+                Column {
+                    Text("Dinner Availability", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("Tap times to set Free ✓ vs Busy", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
                 }
-
-                Text(
-                    text = if (days.isNotEmpty()) days[selectedDayIndex] else "",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                IconButton(
-                    onClick = { if (selectedDayIndex < days.size - 1) selectedDayIndex++ },
-                    enabled = selectedDayIndex < days.size - 1
-                ) {
-                    Icon(Icons.Default.ChevronRight, contentDescription = "Next Day")
-                }
+                Icon(Icons.Default.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             }
         }
 
-        Card(
+        // Day Selector Header
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Time Slot", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text("Availability", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                }
+            IconButton(
+                onClick = { if (selectedDayIndex > 0) selectedDayIndex-- },
+                enabled = selectedDayIndex > 0,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(Icons.Default.ChevronLeft, contentDescription = "Previous Day")
+            }
 
-                Divider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Text(
+                text = currentDayLabel,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
 
-                timeSlots.forEach { timeSlot ->
-                    val cell = grid.find { it.dayIndex == selectedDayIndex && it.timeSlot == timeSlot }
-                    val isAvailable = cell?.isAvailable == true
+            IconButton(
+                onClick = { if (selectedDayIndex < days.size - 1) selectedDayIndex++ },
+                enabled = selectedDayIndex < days.size - 1,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(Icons.Default.ChevronRight, contentDescription = "Next Day")
+            }
+        }
 
+        // 7-Day Quick Day Chips Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            days.forEachIndexed { index, dayStr ->
+                val shortDay = dayStr.substringBefore(",")
+                val isSelected = (index == selectedDayIndex)
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { selectedDayIndex = index },
+                    label = { Text(shortDay, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) }
+                )
+            }
+        }
+
+        // 3-Column Time Slot Grid
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                timeSlots.chunked(3).forEach { rowSlots ->
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = timeSlot,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp
-                        )
+                        rowSlots.forEach { timeSlot ->
+                            val cell = grid.find { (it.dayIndex == selectedDayIndex || (currentDayLabel.isNotEmpty() && it.dayLabel == currentDayLabel)) && it.timeSlot == timeSlot }
+                            val isAvailable = cell?.isAvailable == true
 
-                        Box(
-                            modifier = Modifier
-                                .width(140.dp)
-                                .height(44.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isAvailable) MaterialTheme.colorScheme.primaryContainer else Color.LightGray.copy(alpha = 0.3f))
-                                .clickable {
-                                    viewModel.toggleAvailability(selectedDayIndex, timeSlot)
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (isAvailable) "Free ✓" else "Busy",
-                                color = if (isAvailable) MaterialTheme.colorScheme.onPrimaryContainer else Color.DarkGray,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isAvailable) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                border = if (isAvailable) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp)
+                                    .clickable {
+                                        viewModel.toggleAvailability(selectedDayIndex, timeSlot, currentDayLabel)
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    if (isAvailable) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                    Text(
+                                        text = timeSlot,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isAvailable) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isAvailable) MaterialTheme.colorScheme.onPrimaryContainer else Color.DarkGray
+                                    )
+                                }
+                            }
+                        }
+                        if (rowSlots.size < 3) {
+                            repeat(3 - rowSlots.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }
             }
         }
-        
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            modifier = Modifier.fillMaxWidth()
+
+        // Auto-Save Info Indicator
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("💡", fontSize = 20.sp)
-                Spacer(modifier = Modifier.width(12.dp))
-                Text("Matching happens automatically based on overlapping free slots, cuisine preferences, and trust ratings.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            }
+            Icon(Icons.Default.CloudDone, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "Tapped times auto-saved to Firebase",
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp
+            )
         }
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
 @Composable
-fun MatchScreen(viewModel: TableForViewModel = viewModel()) {
+fun MatchScreen(
+    viewModel: TableForViewModel = viewModel(),
+    onOpenChat: () -> Unit = {}
+) {
     val group = viewModel.dinnerGroup
-    var isExpanded by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -515,11 +665,9 @@ fun MatchScreen(viewModel: TableForViewModel = viewModel()) {
         if (group != null) {
             item {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                     shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { isExpanded = !isExpanded }
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(20.dp)) {
                         Row(
@@ -527,46 +675,75 @@ fun MatchScreen(viewModel: TableForViewModel = viewModel()) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Box(
                                     modifier = Modifier
                                         .size(44.dp)
                                         .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.secondary),
+                                        .background(MaterialTheme.colorScheme.primary),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(Icons.Default.Restaurant, contentDescription = null, tint = Color.White)
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
-                                    Text(group.restaurantName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                    Text("Matched Dinner Group", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                    Text(
+                                        text = group.restaurantName,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "Matched Dinner Group",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                    )
                                 }
                             }
-                            Icon(
-                                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = if (isExpanded) "Collapse" else "Expand",
-                                tint = MaterialTheme.colorScheme.secondary
-                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            ) {
+                                Text(
+                                    text = "SCHEDULED",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    maxLines = 1
+                                )
+                            }
                         }
+
                         Spacer(modifier = Modifier.height(12.dp))
+
                         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             Text("🍽️ ${group.cuisine}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                             Text("📍 ${group.neighborhood}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("⏰ ${group.timeString}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                        Text("⏰ ${group.timeString}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("📍 Address: ${group.address}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
 
-                        if (isExpanded) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Divider(color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f))
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("📍 Address: ${group.address}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("Tap to collapse", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                        } else {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Tap to view restaurant address ↓", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Group Chat Button directly inside Match Screen
+                        Button(
+                            onClick = onOpenChat,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Group Chat", modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Open Group Chat", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -587,6 +764,7 @@ fun MatchScreen(viewModel: TableForViewModel = viewModel()) {
             }
 
             items(group.members) { member ->
+                val displayDiet = if (member.diet == "None" || member.diet.isBlank()) "Standard" else member.diet
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -612,7 +790,7 @@ fun MatchScreen(viewModel: TableForViewModel = viewModel()) {
                             Column {
                                 Text(member.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text("${member.role} • Diet: ${member.diet}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                Text("${member.role} • Diet: $displayDiet", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                             }
                         }
                         Surface(

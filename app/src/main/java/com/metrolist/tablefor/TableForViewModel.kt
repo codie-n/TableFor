@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -50,6 +51,12 @@ class TableForViewModel @JvmOverloads constructor(
     var memberRatings by mutableStateOf<List<MemberRating>>(emptyList())
         private set
 
+    private var lastLocalScheduleChangeTime = 0L
+    private var profileJob: Job? = null
+    private var availabilityJob: Job? = null
+    private var groupJob: Job? = null
+    private var chatJob: Job? = null
+
     init {
         generateUpcomingWeekGrid()
         initRatings()
@@ -64,7 +71,7 @@ class TableForViewModel @JvmOverloads constructor(
                     currentUserId = user.uid
                     isLoggedIn = true
                     listenToFirebaseData()
-                } else {
+                } else if (repo.currentUser != null) {
                     currentUserId = ""
                     isLoggedIn = false
                 }
@@ -100,6 +107,7 @@ class TableForViewModel @JvmOverloads constructor(
                 currentUserId = newProfile.id
                 isLoggedIn = true
                 authError = null
+                lastLocalScheduleChangeTime = 0L
                 listenToFirebaseData()
             } catch (e: Exception) {
                 authError = parseAuthException(e)
@@ -129,6 +137,7 @@ class TableForViewModel @JvmOverloads constructor(
                 currentUserId = loggedInProfile.id
                 isLoggedIn = true
                 authError = null
+                lastLocalScheduleChangeTime = 0L
                 listenToFirebaseData()
             } catch (e: Exception) {
                 authError = parseAuthException(e)
@@ -139,10 +148,18 @@ class TableForViewModel @JvmOverloads constructor(
     }
 
     fun signOut() {
+        profileJob?.cancel()
+        availabilityJob?.cancel()
+        groupJob?.cancel()
+        chatJob?.cancel()
+
         firebaseRepository?.signOut()
         isLoggedIn = false
         currentUserId = ""
+        profile = UserProfile()
         authError = null
+        lastLocalScheduleChangeTime = 0L
+        generateUpcomingWeekGrid()
     }
 
     fun clearAuthError() {
@@ -200,8 +217,15 @@ class TableForViewModel @JvmOverloads constructor(
 
     private fun listenToFirebaseData() {
         val repo = firebaseRepository ?: return
-        viewModelScope.launch {
-            repo.getUserProfile()
+        val activeUserId = currentUserId.ifEmpty { return }
+
+        profileJob?.cancel()
+        availabilityJob?.cancel()
+        groupJob?.cancel()
+        chatJob?.cancel()
+
+        profileJob = viewModelScope.launch {
+            repo.getUserProfile(activeUserId)
                 .catch { /* Fallback to local profile */ }
                 .collect { remoteProfile ->
                     if (remoteProfile != null) {
@@ -210,18 +234,26 @@ class TableForViewModel @JvmOverloads constructor(
                 }
         }
 
-        viewModelScope.launch {
-            repo.getAvailability()
+        availabilityJob = viewModelScope.launch {
+            repo.getAvailability(activeUserId)
                 .catch { /* Fallback to local schedule */ }
                 .collect { remoteCells ->
-                    if (remoteCells.isNotEmpty()) {
-                        availabilityGrid = remoteCells
+                    val now = System.currentTimeMillis()
+                    if (now - lastLocalScheduleChangeTime > 2000L) {
+                        if (remoteCells.isNotEmpty()) {
+                            availabilityGrid = remoteCells
+                        } else {
+                            if (availabilityGrid.isEmpty()) {
+                                generateUpcomingWeekGrid()
+                            }
+                            repo.saveAvailability(userId = activeUserId, cells = availabilityGrid)
+                        }
                     }
                 }
         }
 
         dinnerGroup?.groupId?.let { groupId ->
-            viewModelScope.launch {
+            groupJob = viewModelScope.launch {
                 repo.getDinnerGroup(groupId)
                     .catch { /* Fallback to local group */ }
                     .collect { remoteGroup ->
@@ -231,7 +263,7 @@ class TableForViewModel @JvmOverloads constructor(
                     }
             }
 
-            viewModelScope.launch {
+            chatJob = viewModelScope.launch {
                 repo.getChatMessages(groupId)
                     .catch { /* Fallback to local messages */ }
                     .collect { remoteMessages ->
@@ -294,22 +326,39 @@ class TableForViewModel @JvmOverloads constructor(
         }
     }
 
-    fun toggleAvailability(dayIndex: Int, timeSlot: String) {
+    fun toggleAvailability(dayIndex: Int, timeSlot: String, dayLabel: String = "") {
+        lastLocalScheduleChangeTime = System.currentTimeMillis()
+        val targetLabel = dayLabel.ifEmpty {
+            availabilityGrid.find { it.dayIndex == dayIndex }?.dayLabel ?: ""
+        }
+        var foundMatch = false
         val updatedGrid = availabilityGrid.map { cell ->
-            if (cell.dayIndex == dayIndex && cell.timeSlot == timeSlot) {
-                val newStatus = !cell.isAvailable
-                updatedStatus = newStatus
-                cell.copy(isAvailable = newStatus)
+            val matchesDay = (cell.dayIndex == dayIndex) || (targetLabel.isNotEmpty() && cell.dayLabel == targetLabel)
+            if (matchesDay && cell.timeSlot == timeSlot) {
+                foundMatch = true
+                cell.copy(isAvailable = !cell.isAvailable)
             } else {
                 cell
             }
         }
-        availabilityGrid = updatedGrid
 
+        val finalGrid = if (foundMatch) {
+            updatedGrid
+        } else {
+            updatedGrid + AvailabilityCell(
+                dayIndex = dayIndex,
+                dayLabel = targetLabel,
+                timeSlot = timeSlot,
+                isAvailable = true
+            )
+        }
+        availabilityGrid = finalGrid
+
+        val userId = currentUserId
         firebaseRepository?.let { repo ->
             viewModelScope.launch {
                 try {
-                    repo.saveAvailability(cells = updatedGrid)
+                    repo.saveAvailability(userId = userId, cells = finalGrid)
                 } catch (_: Exception) {}
             }
         }

@@ -2,6 +2,7 @@ package com.metrolist.tablefor
 
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.ServerTimestamp
 
 /**
@@ -10,14 +11,14 @@ import com.google.firebase.firestore.ServerTimestamp
  */
 data class FirestoreUserProfile(
     @DocumentId val id: String = "",
-    val name: String = "",
-    val bio: String = "",
-    val location: String = "",
-    val diets: List<String> = emptyList(),
-    val cuisinePreferences: List<String> = emptyList(),
-    val budget: String = "",
-    val trustRating: Double = 5.0,
-    val totalRatings: Int = 0,
+    @get:PropertyName("name") @field:PropertyName("name") val name: String = "",
+    @get:PropertyName("bio") @field:PropertyName("bio") val bio: String = "",
+    @get:PropertyName("location") @field:PropertyName("location") val location: String = "",
+    @get:PropertyName("diets") @field:PropertyName("diets") val diets: List<String> = emptyList(),
+    @get:PropertyName("cuisinePreferences") @field:PropertyName("cuisinePreferences") val cuisinePreferences: List<String> = emptyList(),
+    @get:PropertyName("budget") @field:PropertyName("budget") val budget: String = "",
+    @get:PropertyName("trustRating") @field:PropertyName("trustRating") val trustRating: Double = 5.0,
+    @get:PropertyName("totalRatings") @field:PropertyName("totalRatings") val totalRatings: Int = 0,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 ) {
@@ -58,15 +59,15 @@ data class FirestoreUserProfile(
  */
 data class FirestoreSchedule(
     @DocumentId val userId: String = "",
-    val cells: List<FirestoreAvailabilityCell> = emptyList(),
+    @get:PropertyName("cells") @field:PropertyName("cells") val cells: List<FirestoreAvailabilityCell> = emptyList(),
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
 
 data class FirestoreAvailabilityCell(
-    val dayIndex: Int = 0,
-    val dayLabel: String = "",
-    val timeSlot: String = "",
-    val isAvailable: Boolean = false
+    @get:PropertyName("dayIndex") @field:PropertyName("dayIndex") val dayIndex: Int = 0,
+    @get:PropertyName("dayLabel") @field:PropertyName("dayLabel") val dayLabel: String = "",
+    @get:PropertyName("timeSlot") @field:PropertyName("timeSlot") val timeSlot: String = "",
+    @get:PropertyName("isAvailable") @field:PropertyName("isAvailable") val isAvailable: Boolean = false
 ) {
     fun toAvailabilityCell(): AvailabilityCell {
         return AvailabilityCell(
