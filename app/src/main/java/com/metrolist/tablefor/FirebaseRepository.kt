@@ -9,39 +9,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
-private data class DemoAccount(
-    val email: String,
-    val passwordHash: String,
-    val profile: UserProfile
-)
-
 class FirebaseRepository(
     private val context: android.content.Context? = null,
     private val firestore: FirebaseFirestore? = try { FirebaseFirestore.getInstance() } catch (_: Throwable) { null },
     private val auth: FirebaseAuth? = try { FirebaseAuth.getInstance() } catch (_: Throwable) { null }
 ) {
-    private val demoAccountsDb: MutableMap<String, DemoAccount> = mutableMapOf(
-        "alex@example.com" to DemoAccount(
-            email = "alex@example.com",
-            passwordHash = "password123",
-            profile = UserProfile(
-                id = "user_1",
-                name = "Alex Chen",
-                bio = "New in town, love exploring food spots!",
-                location = "Downtown / Financial District",
-                diets = listOf("Vegetarian"),
-                cuisinePreferences = listOf("Italian", "Japanese", "Mexican"),
-                budget = "$$ (Moderate)",
-                trustRating = 4.8f,
-                totalRatings = 12
-            )
-        )
-    )
-
-    init {
-        loadStoredDemoAccounts()
-    }
-
     private fun getApplicationContext(): android.content.Context? {
         if (context != null) return context
         return try {
@@ -49,45 +21,6 @@ class FirebaseRepository(
         } catch (_: Throwable) {
             null
         }
-    }
-
-    private fun getPrefs(): android.content.SharedPreferences? {
-        return getApplicationContext()?.getSharedPreferences("tablefor_demo_users", android.content.Context.MODE_PRIVATE)
-    }
-
-    private fun loadStoredDemoAccounts() {
-        val prefs = getPrefs() ?: return
-        val all = prefs.all
-        for ((email, value) in all) {
-            if (value is String) {
-                try {
-                    val parts = value.split("|||")
-                    if (parts.size >= 8) {
-                        val pwd = parts[0]
-                        val id = parts[1]
-                        val name = parts[2]
-                        val bio = parts[3]
-                        val loc = parts[4]
-                        val budget = parts[5]
-                        val rating = parts[6].toFloatOrNull() ?: 5.0f
-                        val count = parts[7].toIntOrNull() ?: 0
-                        val diets = if (parts.size >= 9 && parts[8].isNotBlank()) parts[8].split(",") else emptyList()
-                        val cuisines = if (parts.size >= 10 && parts[9].isNotBlank()) parts[9].split(",") else listOf("Italian", "Japanese")
-                        val profile = UserProfile(id, name, bio, loc, diets, cuisines, budget, rating, count)
-                        demoAccountsDb[email] = DemoAccount(email, pwd, profile)
-                    }
-                } catch (_: Exception) {}
-            }
-        }
-    }
-
-    private fun saveDemoAccountToPrefs(account: DemoAccount) {
-        val prefs = getPrefs() ?: return
-        val p = account.profile
-        val dietsJoined = p.diets.joinToString(",")
-        val cuisinesJoined = p.cuisinePreferences.joinToString(",")
-        val serialized = "${account.passwordHash}|||${p.id}|||${p.name}|||${p.bio}|||${p.location}|||${p.budget}|||${p.trustRating}|||${p.totalRatings}|||${dietsJoined}|||${cuisinesJoined}"
-        prefs.edit().putString(account.email, serialized).apply()
     }
 
     val currentUser: FirebaseUser?
@@ -116,50 +49,49 @@ class FirebaseRepository(
     suspend fun signUp(email: String, password: String, name: String): UserProfile {
         val cleanEmail = sanitizeEmail(email)
         val cleanName = sanitizeName(name)
-        val a = auth
-        if (a != null) {
-            try {
-                val authResult = a.createUserWithEmailAndPassword(cleanEmail, password).await()
-                val user = authResult.user ?: throw IllegalStateException("User creation failed")
+        val a = auth ?: throw IllegalStateException("Firebase Authentication is not available.")
 
-                val initialProfile = UserProfile(
-                    id = user.uid,
-                    name = cleanName.ifEmpty { user.displayName ?: cleanEmail.substringBefore("@") },
-                    bio = "New TableFor member",
-                    location = "Downtown",
-                    diets = emptyList(),
-                    cuisinePreferences = listOf("Italian", "Japanese"),
-                    budget = "$$ (Moderate)",
-                    trustRating = 5.0f,
-                    totalRatings = 0
-                )
-                try {
-                    saveUserProfile(initialProfile)
-                } catch (_: Exception) {}
-                return initialProfile
-            } catch (e: Exception) {
-                if (e is com.google.firebase.auth.FirebaseAuthUserCollisionException ||
-                    e.message?.contains("already in use", ignoreCase = true) == true ||
-                    e.message?.contains("already exists", ignoreCase = true) == true) {
-                    throw IllegalStateException("An account with this email address already exists. Please sign in instead.")
-                }
-                if (isApiKeyError(e)) {
-                    return signUpDemo(cleanEmail, password, cleanName)
-                }
-                throw e
-            }
-        }
-        return signUpDemo(cleanEmail, password, cleanName)
+        val authResult = a.createUserWithEmailAndPassword(cleanEmail, password).await()
+        val user = authResult.user ?: throw IllegalStateException("User creation failed")
+
+        val initialProfile = UserProfile(
+            id = user.uid,
+            name = cleanName.ifEmpty { user.displayName ?: cleanEmail.substringBefore("@") },
+            bio = "New TableFor member",
+            location = "Downtown",
+            diets = emptyList(),
+            cuisinePreferences = listOf("Italian", "Japanese"),
+            budget = "$$ (Moderate)",
+            trustRating = 5.0f,
+            totalRatings = 0
+        )
+        try {
+            saveUserProfile(initialProfile)
+        } catch (_: Exception) {}
+        return initialProfile
     }
 
-    private fun signUpDemo(cleanEmail: String, password: String, cleanName: String): UserProfile {
-        if (demoAccountsDb.containsKey(cleanEmail)) {
-            throw IllegalStateException("An account with this email address already exists. Please sign in instead.")
+    suspend fun signIn(email: String, password: String): UserProfile {
+        val cleanEmail = sanitizeEmail(email)
+        val a = auth ?: throw IllegalStateException("Firebase Authentication is not available.")
+
+        val authResult = a.signInWithEmailAndPassword(cleanEmail, password).await()
+        val user = authResult.user ?: throw IllegalStateException("Sign in failed")
+
+        val fs = firestore
+        if (fs != null) {
+            val userDoc = fs.collection("users").document(user.uid).get().await()
+            if (userDoc.exists()) {
+                val firestoreUser = userDoc.toObject(FirestoreUserProfile::class.java)
+                if (firestoreUser != null) {
+                    return firestoreUser.toUserProfile()
+                }
+            }
         }
-        val dummyUid = "user_" + Math.abs(cleanEmail.hashCode())
+
         val profile = UserProfile(
-            id = dummyUid,
-            name = cleanName.ifEmpty { cleanEmail.substringBefore("@").replaceFirstChar { it.uppercase() } },
+            id = user.uid,
+            name = user.displayName ?: cleanEmail.substringBefore("@").replaceFirstChar { it.uppercase() },
             bio = "TableFor member",
             location = "Downtown",
             diets = emptyList(),
@@ -168,64 +100,10 @@ class FirebaseRepository(
             trustRating = 5.0f,
             totalRatings = 0
         )
-        val account = DemoAccount(cleanEmail, password, profile)
-        demoAccountsDb[cleanEmail] = account
-        saveDemoAccountToPrefs(account)
+        try {
+            saveUserProfile(profile)
+        } catch (_: Exception) {}
         return profile
-    }
-
-    suspend fun signIn(email: String, password: String): UserProfile {
-        val cleanEmail = sanitizeEmail(email)
-        val a = auth
-        if (a != null) {
-            try {
-                val authResult = a.signInWithEmailAndPassword(cleanEmail, password).await()
-                val user = authResult.user ?: throw IllegalStateException("Sign in failed")
-
-                val fs = firestore
-                if (fs != null) {
-                    val userDoc = fs.collection("users").document(user.uid).get().await()
-                    if (!userDoc.exists()) {
-                        throw IllegalStateException("User account does not exist in the database. Please sign up first.")
-                    }
-                    val firestoreUser = userDoc.toObject(FirestoreUserProfile::class.java)
-                    if (firestoreUser != null) {
-                        return firestoreUser.toUserProfile()
-                    }
-                }
-                val profile = UserProfile(
-                    id = user.uid,
-                    name = user.displayName ?: cleanEmail.substringBefore("@").replaceFirstChar { it.uppercase() },
-                    bio = "TableFor member",
-                    location = "Downtown",
-                    diets = emptyList(),
-                    cuisinePreferences = listOf("Italian", "Japanese"),
-                    budget = "$$ (Moderate)",
-                    trustRating = 5.0f,
-                    totalRatings = 0
-                )
-                try {
-                    saveUserProfile(profile)
-                } catch (_: Exception) {}
-                return profile
-            } catch (e: Exception) {
-                if (isApiKeyError(e)) {
-                    return signInDemo(cleanEmail, password)
-                }
-                throw e
-            }
-        }
-        return signInDemo(cleanEmail, password)
-    }
-
-    private fun signInDemo(cleanEmail: String, password: String): UserProfile {
-        val account = demoAccountsDb[cleanEmail]
-            ?: throw IllegalStateException("User account does not exist in the database. Please sign up first.")
-
-        if (account.passwordHash != password) {
-            throw IllegalStateException("Invalid email or password.")
-        }
-        return account.profile
     }
 
     private fun sanitizeEmail(rawEmail: String): String {
@@ -240,13 +118,6 @@ class FirebaseRepository(
             .replace(Regex(" {2,}"), " ")
     }
 
-    private fun isApiKeyError(e: Exception): Boolean {
-        val msg = e.message ?: ""
-        return msg.contains("API key not valid", ignoreCase = true) ||
-               msg.contains("API_KEY_NOT_VALID", ignoreCase = true) ||
-               msg.contains("invalid API key", ignoreCase = true)
-    }
-
     fun signOut() {
         auth?.signOut()
     }
@@ -254,21 +125,16 @@ class FirebaseRepository(
     // --- USERS ---
     fun getUserProfile(userId: String = currentUserId): Flow<UserProfile?> = callbackFlow {
         val targetId = userId.ifEmpty { currentUserId }
-        val localProfile = demoAccountsDb.values.find { it.profile.id == targetId }?.profile
-        if (localProfile != null) {
-            trySend(localProfile)
-        }
-
         val fs = firestore
         if (fs == null) {
+            trySend(null)
             awaitClose { }
             return@callbackFlow
         }
         val docRef = fs.collection("users").document(targetId)
         val subscription = docRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
-                val fallback = demoAccountsDb.values.find { it.profile.id == targetId }?.profile
-                if (fallback != null) trySend(fallback)
+                close(error)
                 return@addSnapshotListener
             }
             if (snapshot != null && snapshot.exists()) {
@@ -276,30 +142,23 @@ class FirebaseRepository(
                 val userProfile = firestoreUser?.toUserProfile()
                 if (userProfile != null) {
                     trySend(userProfile)
+                } else {
+                    trySend(null)
                 }
             } else {
-                val fallback = demoAccountsDb.values.find { it.profile.id == targetId }?.profile
-                if (fallback != null) trySend(fallback)
+                trySend(null)
             }
         }
         awaitClose { subscription.remove() }
     }
 
     suspend fun saveUserProfile(profile: UserProfile) {
-        val fs = firestore
-        if (fs != null) {
-            try {
-                val docRef = fs.collection("users").document(profile.id)
-                val firestoreUser = FirestoreUserProfile.fromUserProfile(profile)
-                docRef.set(firestoreUser).await()
-            } catch (_: Exception) {}
-        }
-        val entry = demoAccountsDb.entries.find { it.value.profile.id == profile.id }
-        if (entry != null) {
-            val updatedAccount = entry.value.copy(profile = profile)
-            demoAccountsDb[entry.key] = updatedAccount
-            saveDemoAccountToPrefs(updatedAccount)
-        }
+        val fs = firestore ?: return
+        try {
+            val docRef = fs.collection("users").document(profile.id)
+            val firestoreUser = FirestoreUserProfile.fromUserProfile(profile)
+            docRef.set(firestoreUser).await()
+        } catch (_: Exception) {}
     }
 
     // --- SCHEDULES ---
