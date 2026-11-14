@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -191,7 +192,7 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
 
     val diets = listOf("Vegetarian", "Vegan", "Halal", "Gluten-Free")
     val cuisines = listOf("Italian", "Japanese", "Mexican", "Thai", "American", "Indian", "Mediterranean")
-    val budgets = listOf("$ (Budget)", "$$ (Moderate)", "$$$ (Upscale)")
+    val budgets = listOf("$", "$$", "$$$")
     val cities = listOf("Honolulu", "Downtown", "Waikiki", "Ala Moana", "Kakaako", "Kailua")
     var showCityMenu by remember { mutableStateOf(false) }
 
@@ -199,58 +200,55 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Compact Header: Trust Score + Sign Out
+        // Compact Trust Rating & Header Card
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Verified, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text("Reliability Tier", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("${profile.trustRating} ★ (${profile.totalRatings} dinners)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                IconButton(onClick = { viewModel.signOut() }) {
-                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Sign Out", tint = MaterialTheme.colorScheme.error)
+                    Icon(
+                        Icons.Default.Verified,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "Trust Score: ${profile.trustRating} ★ (${profile.totalRatings} dinners)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
             }
         }
 
-        // Personal Details Card (Auto-Saves on change)
+        // Personal Details Card
         Card(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Personal Info", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     // Full Name Field
                     TextField(
                         value = name,
@@ -258,9 +256,9 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
                             name = it
                             viewModel.updateProfile(profile.copy(name = it, bio = bio, location = location))
                         },
-                        label = { Text("Full Name", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        placeholder = { Text("e.g. Alex Chen") },
-                        leadingIcon = { Icon(Icons.Default.PersonOutline, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        label = { Text("Full Name", fontSize = 11.sp) },
+                        placeholder = { Text("e.g. Alex Chen", fontSize = 11.sp) },
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(16.dp)) },
                         trailingIcon = {
                             if (name.isNotEmpty()) {
                                 IconButton(
@@ -268,9 +266,9 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
                                         name = ""
                                         viewModel.updateProfile(profile.copy(name = "", bio = bio, location = location))
                                     },
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(20.dp)
                                 ) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Clear name", modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear name", modifier = Modifier.size(14.dp))
                                 }
                             }
                         },
@@ -278,7 +276,7 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
                             capitalization = KeyboardCapitalization.Words,
                             imeAction = ImeAction.Next
                         ),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(10.dp),
                         singleLine = true,
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -289,21 +287,31 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Location Only Icon Button + Dropdown Menu
+                    // Location Button + Dropdown Menu
                     Box(modifier = Modifier.align(Alignment.CenterVertically)) {
                         Surface(
-                            shape = CircleShape,
+                            shape = RoundedCornerShape(10.dp),
                             color = MaterialTheme.colorScheme.primaryContainer,
                             modifier = Modifier
-                                .size(48.dp)
+                                .height(52.dp)
                                 .clickable { showCityMenu = true }
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Icon(
                                     Icons.Default.LocationOn,
-                                    contentDescription = "Location: $location",
+                                    contentDescription = "Location",
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    location.ifEmpty { "Location" },
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
                         }
@@ -314,8 +322,8 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
                         ) {
                             cities.forEach { city ->
                                 DropdownMenuItem(
-                                    text = { Text(city, fontWeight = if (location == city) FontWeight.Bold else FontWeight.Normal) },
-                                    leadingIcon = { Icon(Icons.Default.LocationCity, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                    text = { Text(city, fontSize = 12.sp, fontWeight = if (location == city) FontWeight.Bold else FontWeight.Normal) },
+                                    leadingIcon = { Icon(Icons.Default.LocationCity, contentDescription = null, modifier = Modifier.size(16.dp)) },
                                     onClick = {
                                         location = city
                                         viewModel.updateProfile(profile.copy(name = name, bio = bio, location = city))
@@ -327,16 +335,16 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
                     }
                 }
 
-                // About Me / Bio Field (Compact height)
+                // About Me / Bio Field
                 TextField(
                     value = bio,
                     onValueChange = {
                         bio = it
                         viewModel.updateProfile(profile.copy(name = name, bio = it, location = location))
                     },
-                    label = { Text("About Me / Bio", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    placeholder = { Text("Share a bit about yourself...") },
-                    leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    label = { Text("About Me / Bio", fontSize = 11.sp) },
+                    placeholder = { Text("Share a bit about yourself...", fontSize = 11.sp) },
+                    leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp)) },
                     trailingIcon = {
                         if (bio.isNotEmpty()) {
                             IconButton(
@@ -344,9 +352,9 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
                                     bio = ""
                                     viewModel.updateProfile(profile.copy(name = name, bio = "", location = location))
                                 },
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(20.dp)
                             ) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear bio", modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Clear, contentDescription = "Clear bio", modifier = Modifier.size(14.dp))
                             }
                         }
                     },
@@ -354,7 +362,7 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
                         capitalization = KeyboardCapitalization.Sentences,
                         imeAction = ImeAction.Done
                     ),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(10.dp),
                     singleLine = true,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -367,22 +375,25 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
             }
         }
 
-        // Unified Preferences & Budget Card (Auto-Saves on change)
+        // Unified Preferences Card
         Card(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 // Dining Budget Row
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AttachMoney, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Dining Budget", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Icon(Icons.Default.AttachMoney, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Dining Budget", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     budgets.forEach { b ->
                         val selected = (selectedBudget == b)
@@ -392,27 +403,33 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
                                 selectedBudget = b
                                 viewModel.updateProfile(profile.copy(budget = b))
                             },
-                            label = { Text(b, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
+                            label = {
+                                Text(
+                                    text = b,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
                             leadingIcon = if (selected) {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(12.dp)) }
                             } else null,
                             modifier = Modifier.weight(1f)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(2.dp))
-
-                // Dietary Preferences
+                // Dietary Restrictions
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.RestaurantMenu, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Dietary Restrictions", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Icon(Icons.Default.RestaurantMenu, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Dietary Restrictions", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     diets.forEach { diet ->
                         val selected = profile.diets.contains(diet)
@@ -422,26 +439,24 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
                                 val newDiets = if (selected) profile.diets - diet else profile.diets + diet
                                 viewModel.updateProfile(profile.copy(diets = newDiets))
                             },
-                            label = { Text(diet, fontSize = 12.sp) },
+                            label = { Text(diet, fontSize = 11.sp) },
                             leadingIcon = if (selected) {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(12.dp)) }
                             } else null
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(2.dp))
-
-                // Cuisine Preferences
+                // Preferred Cuisines
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Fastfood, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Preferred Cuisines", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Icon(Icons.Default.Fastfood, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Preferred Cuisines", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     cuisines.forEach { cuisine ->
                         val selected = profile.cuisinePreferences.contains(cuisine)
@@ -451,30 +466,14 @@ fun ProfileScreen(viewModel: TableForViewModel = viewModel()) {
                                 val newCuisines = if (selected) profile.cuisinePreferences - cuisine else profile.cuisinePreferences + cuisine
                                 viewModel.updateProfile(profile.copy(cuisinePreferences = newCuisines))
                             },
-                            label = { Text(cuisine, fontSize = 12.sp) },
+                            label = { Text(cuisine, fontSize = 11.sp) },
                             leadingIcon = if (selected) {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(12.dp)) }
                             } else null
                         )
                     }
                 }
             }
-        }
-
-        // Auto-Save Status Indicator
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.CloudDone, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "Changes auto-saved to database",
-                color = MaterialTheme.colorScheme.secondary,
-                fontWeight = FontWeight.Medium,
-                fontSize = 12.sp
-            )
         }
     }
 }
@@ -631,21 +630,7 @@ fun ScheduleScreen(viewModel: TableForViewModel = viewModel()) {
             }
         }
 
-        // Auto-Save Info Indicator
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.CloudDone, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "Tapped times auto-saved to Firebase",
-                color = MaterialTheme.colorScheme.secondary,
-                fontWeight = FontWeight.Medium,
-                fontSize = 12.sp
-            )
-        }
+
     }
 }
 

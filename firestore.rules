@@ -1,4 +1,5 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -17,34 +18,49 @@ service cloud.firestore {
     }
 
     // --- USERS COLLECTION ---
-    // Anyone authenticated can read user profiles; users can update only their own profile
+    // Anyone authenticated can read user profiles; users can create and update only their own profile
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create, update: if isOwner(userId);
-      allow delete: if false; // Profiles shouldn't be deleted directly
+      allow create, update: if isOwner(userId)
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.bio is string
+        && request.resource.data.bio.size() <= 500
+        && request.resource.data.location is string
+        && request.resource.data.diets is list
+        && request.resource.data.cuisinePreferences is list
+        && request.resource.data.budget is string;
+      allow delete: if false;
     }
 
     // --- SCHEDULES / AVAILABILITY COLLECTION ---
-    // Users can read and update their own weekly schedule
+    // Users can read schedules and modify only their own weekly schedule
     match /schedules/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && request.resource.data.cells is list
+        && request.resource.data.cells.size() <= 100;
+      allow delete: if false;
     }
 
     // --- DINNER GROUPS COLLECTION ---
-    // Members of a group or authenticated users can view matched groups
+    // Authenticated users can view matched groups; only members can update group details
     match /dinner_groups/{groupId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated()
+        && request.auth.uid in request.resource.data.memberIds;
       allow update: if isGroupMember(groupId);
+      allow delete: if false;
 
       // --- GROUP CHAT MESSAGES SUBCOLLECTION ---
-      // Only members of the dinner group can read and post messages
+      // Strictly members of the dinner group can read and post chat messages
       match /messages/{messageId} {
         allow read: if isGroupMember(groupId);
         allow create: if isGroupMember(groupId)
-                      && request.resource.data.senderId == request.auth.uid;
-        allow update, delete: if false; // Messages are immutable
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 1000;
+        allow update, delete: if false;
       }
 
       // --- POST-DINNER RATINGS SUBCOLLECTION ---
@@ -52,8 +68,20 @@ service cloud.firestore {
       match /ratings/{ratingId} {
         allow read: if isGroupMember(groupId);
         allow create, update: if isGroupMember(groupId)
-                              && request.resource.data.raterUserId == request.auth.uid;
+          && request.resource.data.raterUserId == request.auth.uid
+          && request.resource.data.punctuality is int
+          && request.resource.data.punctuality >= 1 && request.resource.data.punctuality <= 5
+          && request.resource.data.friendliness is int
+          && request.resource.data.friendliness >= 1 && request.resource.data.friendliness <= 5
+          && request.resource.data.reliability is int
+          && request.resource.data.reliability >= 1 && request.resource.data.reliability <= 5;
+        allow delete: if false;
       }
+    }
+
+    // --- DEFAULT DENY ALL OTHER PATHS ---
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
