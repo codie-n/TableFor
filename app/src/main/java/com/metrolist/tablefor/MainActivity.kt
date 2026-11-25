@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -93,12 +94,35 @@ fun MainAppScaffold(viewModel: TableForViewModel = viewModel()) {
         NavigationItem("Rate", Screen.Rate, Icons.Default.Star)
     )
 
-    var currentRouteTitle by remember { mutableStateOf("Profile & Preferences") }
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = currentBackStackEntry?.destination?.route
+
+    val currentRouteTitle = when {
+        currentDestination?.contains("Profile") == true -> "Profile & Preferences"
+        currentDestination?.contains("Schedule") == true -> "Upcoming Week Schedule"
+        currentDestination?.contains("Match") == true -> "Matched Dinner Group"
+        currentDestination?.contains("Chat") == true -> "Group Chat"
+        currentDestination?.contains("Rate") == true -> "Post-Dinner Ratings"
+        else -> "Profile & Preferences"
+    }
+
+    val isChatScreen = currentDestination?.contains("Chat") == true
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(currentRouteTitle, fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    if (isChatScreen) {
+                        IconButton(onClick = {
+                            if (!navController.popBackStack()) {
+                                navController.navigate(Screen.Match)
+                            }
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Exit Chat")
+                        }
+                    }
+                },
                 actions = {
                     IconButton(onClick = { viewModel.signOut() }) {
                         Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Sign Out")
@@ -112,9 +136,6 @@ fun MainAppScaffold(viewModel: TableForViewModel = viewModel()) {
         },
         bottomBar = {
             NavigationBar {
-                val currentBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentDestination = currentBackStackEntry?.destination?.route
-
                 items.forEach { item ->
                     val selected = currentDestination?.contains(item.screen::class.simpleName ?: "") == true
                     NavigationBarItem(
@@ -122,13 +143,6 @@ fun MainAppScaffold(viewModel: TableForViewModel = viewModel()) {
                         label = { Text(item.title) },
                         selected = selected,
                         onClick = {
-                            currentRouteTitle = when (item.screen) {
-                                is Screen.Profile -> "Profile & Preferences"
-                                is Screen.Schedule -> "Upcoming Week Schedule"
-                                is Screen.Match -> "Matched Dinner Group"
-                                is Screen.Chat -> "Group Chat"
-                                is Screen.Rate -> "Post-Dinner Ratings"
-                            }
                             navController.navigate(item.screen) {
                                 popUpTo(navController.graph.findStartDestination().id) {
                                     saveState = true
@@ -157,13 +171,19 @@ fun MainAppScaffold(viewModel: TableForViewModel = viewModel()) {
                 MatchScreen(
                     viewModel = viewModel,
                     onOpenChat = {
-                        currentRouteTitle = "Group Chat"
                         navController.navigate(Screen.Chat)
                     }
                 )
             }
             composable<Screen.Chat> {
-                ChatScreen(viewModel = viewModel)
+                ChatScreen(
+                    viewModel = viewModel,
+                    onExit = {
+                        if (!navController.popBackStack()) {
+                            navController.navigate(Screen.Match)
+                        }
+                    }
+                )
             }
             composable<Screen.Rate> {
                 RatingScreen(viewModel = viewModel)
@@ -799,7 +819,10 @@ fun MatchScreen(
 }
 
 @Composable
-fun ChatScreen(viewModel: TableForViewModel = viewModel()) {
+fun ChatScreen(
+    viewModel: TableForViewModel = viewModel(),
+    onExit: (() -> Unit)? = null
+) {
     val messages = viewModel.chatMessages
     var inputMessage by remember { mutableStateOf("") }
 
@@ -808,6 +831,76 @@ fun ChatScreen(viewModel: TableForViewModel = viewModel()) {
             .fillMaxSize()
             .padding(16.dp)
     ) {
+        // Top Header with Chat Info and Exit Button
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Chat,
+                            contentDescription = "Group Chat",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = viewModel.dinnerGroup?.restaurantName ?: "Group Chat",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${viewModel.dinnerGroup?.members?.size ?: 3} members • Matched Group",
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
+                if (onExit != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = onExit,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = CircleShape
+                            )
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Exit Chat",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
         Card(
             modifier = Modifier
                 .weight(1f)
@@ -1045,7 +1138,7 @@ fun MatchScreenPreview() {
 @Composable
 fun ChatScreenPreview() {
     MaterialTheme {
-        ChatScreen()
+        ChatScreen(onExit = {})
     }
 }
 
